@@ -1,0 +1,124 @@
+.picker-modal {
+  max-width: 820px;
+  padding: 24px;
+}
+
+.picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.picker-title {
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 1.3rem;
+  color: var(--yellow);
+}
+
+.picker-count {
+  font-size: 0.78rem;
+  color: var(--gray-mid);
+  margin-bottom: 12px;
+}
+
+.picker-filters {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 600px) {
+  .picker-filters { grid-template-columns: 1fr; }
+}
+
+/* ===== GRID ===== */
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.poke-card {
+  background: rgba(255,255,255,0.05);
+  border: 2px solid rgba(255,255,255,0.08);
+  border-radius: var(--border-radius);
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--font-body);
+}
+
+.poke-card:hover {
+  border-color: var(--yellow);
+  background: rgba(255,203,5,0.1);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(255,203,5,0.2);
+}
+
+.poke-card-img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.poke-card-id {
+  font-family: var(--font-pixel);
+  font-size: 0.35rem;
+  color: var(--gray-dark);
+}
+
+.poke-card-name {
+  font-weight: 800;
+  font-size: 0.78rem;
+  color: white;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.poke-card-types {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.poke-card-types .type-badge {
+  font-size: 0.55rem;
+  padding: 1px 6px;
+}
+
+/* Skeleton card */
+.skeleton-card {
+  background: rgba(255,255,255,0.03);
+  border: 2px solid rgba(255,255,255,0.05);
+  border-radius: var(--border-radius);
+  padding: 12px 8px;
+  pointer-events: none;
+}
+
+/* Empty */
+.picker-empty {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--gray-mid);
+}
+.picker-empty span { font-size: 3rem; display: block; margin-bottom: 12px; }
+
+.picker-end {
+  text-align: center;
+  color: var(--gray-dark);
+  font-size: 0.75rem;
+  padding: 16px;
+}

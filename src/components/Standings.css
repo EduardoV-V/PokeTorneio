@@ -1,0 +1,202 @@
+.standings-wrap { width: 100%; }
+
+.standings-legend {
+  background: rgba(255, 203, 5, 0.1);
+  border: 1px solid rgba(255, 203, 5, 0.3);
+  border-radius: var(--border-radius-sm);
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--yellow);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.standings-table-wrap {
+  overflow-x: auto;
+  border-radius: var(--border-radius);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.standings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-body);
+}
+
+.standings-table thead tr {
+  background: rgba(0,0,0,0.4);
+}
+
+.standings-table th {
+  padding: 14px 16px;
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gray-mid);
+  text-align: center;
+  border-bottom: 2px solid rgba(255,255,255,0.08);
+}
+
+.standings-table th:nth-child(3) { text-align: left; }
+
+.standings-row {
+  transition: background 0.15s;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.standings-row:hover { background: rgba(255,255,255,0.04); }
+
+.standings-row.top4 {
+  background: rgba(61,125,202,0.08);
+}
+
+.standings-row.top4:hover {
+  background: rgba(61,125,202,0.14);
+}
+
+.standings-row.first {
+  background: rgba(255,203,5,0.08);
+}
+
+.standings-row.first:hover {
+  background: rgba(255,203,5,0.14);
+}
+
+/* Left border for top 4 */
+.standings-row.top4 td:first-child {
+  border-left: 3px solid var(--blue);
+}
+.standings-row.first td:first-child {
+  border-left: 3px solid var(--yellow);
+}
+
+.standings-table td {
+  padding: 12px 16px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.standings-table td:nth-child(3) { text-align: left; }
+
+.rank-cell { font-size: 1.2rem; min-width: 48px; }
+.rank-num {
+  font-family: var(--font-pixel);
+  font-size: 0.6rem;
+  color: var(--gray-mid);
+}
+
+.icon-cell { width: 60px; }
+
+.icon-upload-label {
+  cursor: pointer;
+  display: block;
+}
+.icon-upload-label:hover .player-icon,
+.icon-upload-label:hover .player-icon-placeholder {
+  opacity: 0.8;
+  outline: 2px solid var(--yellow);
+}
+
+.player-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255,255,255,0.2);
+  display: block;
+  margin: 0 auto;
+}
+
+.player-icon-placeholder {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--red), var(--blue));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 1.1rem;
+  margin: 0 auto;
+  border: 2px solid rgba(255,255,255,0.2);
+}
+
+.name-cell { min-width: 140px; }
+.player-name-text {
+  font-weight: 800;
+  font-size: 1rem;
+  color: white;
+}
+
+.name-edit-input {
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  width: 130px;
+}
+
+.stat-cell { min-width: 120px; }
+.stat-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.stat-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: var(--blue);
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s;
+  font-weight: 700;
+  line-height: 1;
+}
+.stat-btn:hover { background: var(--blue-light); }
+.stat-btn.loss { background: #e74c3c; }
+.stat-btn.loss:hover { background: #ff6b6b; }
+
+.stat-value {
+  font-weight: 900;
+  font-size: 1.1rem;
+  min-width: 28px;
+  text-align: center;
+}
+.stat-value.wins { color: #2ecc71; }
+.stat-value.losses { color: #e74c3c; }
+
+.stat-edit {
+  width: 50px;
+  padding: 4px 6px;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.pts-cell { min-width: 60px; }
+.pts-badge {
+  background: var(--yellow);
+  color: var(--black);
+  font-weight: 900;
+  font-size: 0.95rem;
+  padding: 4px 12px;
+  border-radius: 20px;
+  display: inline-block;
+}
+
+.actions-cell {
+  min-width: 110px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
