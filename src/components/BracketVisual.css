@@ -1,0 +1,124 @@
+/* ===== WRAPPER ===== */
+.bv-wrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ===== STATUS (FIXADO CERTO) ===== */
+.bv-status {
+  margin-top: 16px;
+  font-weight: bold;
+  text-align: center;
+}
+
+/* ===== BOARD ===== */
+.bv-board {
+  position: relative;
+
+  width: 90vw;
+  max-width: 700px;
+  aspect-ratio: 3 / 2;
+
+  background-image: url('/bracket.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+
+  border-radius: 20px;
+  overflow: hidden;
+
+  box-shadow:
+    0 8px 40px rgba(0,0,0,0.4),
+    inset 0 0 60px rgba(255,255,255,0.15);
+
+  border: 4px solid #8a7000;
+
+  /* 🎯 CONTROLES GERAIS */
+  --bv-size: 15%;
+  --bv-semi-y: 82%;
+  --bv-final-y: 56%;
+  --bv-champ-y: 40%;
+  --bv-gap: 17.5%;
+}
+
+/* brilho */
+.bv-board::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), transparent 60%),
+    radial-gradient(circle at 70% 70%, rgba(255,255,255,0.1), transparent 50%);
+}
+
+/* ===== POSICIONAMENTO BASE ===== */
+.bv-pos {
+  position: absolute;
+  transform: translate(-50%, -50%);
+    left: 50%;
+  z-index: 2;
+}
+
+/* ===== SEMIS (CONTROLADAS) ===== */
+.bv-s1 { top: var(--bv-semi-y); left: calc(50% - var(--bv-gap) * 1.5); }
+.bv-s2 { top: var(--bv-semi-y); left: calc(50% - var(--bv-gap) * 0.5); }
+.bv-s3 { top: var(--bv-semi-y); left: calc(50% + var(--bv-gap) * 0.5); }
+.bv-s4 { top: var(--bv-semi-y); left: calc(50% + var(--bv-gap) * 1.5); }
+
+/* ===== FINAL ===== */
+.bv-f1 { top: var(--bv-final-y); left: calc(50% - var(--bv-gap)); }
+.bv-f2 { top: var(--bv-final-y); left: calc(50% + var(--bv-gap)); }
+
+/* ===== CAMPEÃO ===== */
+.bv-final { top: var(--bv-champ-y); left: 50%; }
+
+/* ===== PLAYER CARDS (ESCALA RESPONSIVA) ===== */
+.bv-card {
+  width: 75px;
+  aspect-ratio: 3 / 3.6;
+
+  transform: scale(var(--bv-scale));
+
+  transform-origin: center;
+
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+  border: 3px solid #555;
+}
+
+/* conteúdo */
+.bv-card-inner {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bv-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* estados */
+.bv-card--winner {
+  border-color: gold;
+  box-shadow: 0 0 12px gold;
+}
+
+.bv-card--loser {
+  opacity: 0.3;
+  filter: grayscale(80%);
+}
+
+.bv-card--clickable {
+  cursor: pointer;
+}
+
+.bv-card--clickable:hover {
+  transform: scale(1.08);
+}

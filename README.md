@@ -1,23 +1,4 @@
-# 🏆 Torneio Pokémon
-
-Site para gerenciar torneios de Pokémon com fase de pontos corridos, chave eliminatória e montagem de times via PokéAPI.
-
-## ✨ Funcionalidades
-
-- **Pontos Corridos** — tabela com 9 jogadores, vitórias/derrotas ajustáveis, ordenação automática por pontos
-- **Fase Eliminatória** — chave com os top 4 jogadores, semifinais e final interativas
-- **Times** — cada jogador monta seu time de 9 Pokémon com busca por nome, tipo e geração via PokéAPI
-- **Persistência** — todos os dados salvos no `localStorage` do navegador
-- **Fotos personalizadas** — cada jogador pode ter sua própria foto/ícone
-
-## 🚀 Rodando localmente
-
-```bash
-npm install
-npm run dev
-```
-
-## 🌐 Deploy no GitHub Pages
+Site para gerenciar torneio, e isso
 
 1. Crie um repositório chamado `PokeTorneio` no GitHub
 2. Faça push do código para a branch `main`

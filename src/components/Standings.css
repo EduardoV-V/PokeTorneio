@@ -200,3 +200,13 @@
   align-items: center;
   justify-content: center;
 }
+
+.standings-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.standings-top-bar .standings-legend { margin-bottom: 0; }

@@ -6,23 +6,42 @@ import './TeamsPage.css'
 
 const TEAM_SIZE = 9
 
-function PokemonSlot({ pokemon, onSelect, onRemove }) {
+function formatName(name) {
+  return name.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
+function PokemonSlot({ pokemon, isMega, onSelect, onRemove, onSetMega, slotIdx, teamMegaIdx }) {
+  const hasMegaSet = teamMegaIdx !== null && teamMegaIdx !== undefined
+  const isThisMega = teamMegaIdx === slotIdx
+
   if (pokemon) {
-    const name = formatName(pokemon.name)
     return (
-      <div className="pokemon-slot filled">
-        <img
-          src={pokemon.sprite}
-          alt={pokemon.name}
-          className="slot-sprite"
-        />
-        <div className="slot-name">{name}</div>
+      <div className={`pokemon-slot filled ${isThisMega ? 'is-mega' : ''}`}>
+        {isThisMega && <div className="mega-badge">MEGA ⚡</div>}
+        <img src={pokemon.sprite} alt={pokemon.name} className="slot-sprite" />
+        <div className="slot-name">{formatName(pokemon.name)}</div>
         <div className="slot-types">
           {pokemon.types.map(t => (
             <span key={t} className="type-badge" style={{ background: TYPE_COLORS[t] || '#888' }}>{t}</span>
           ))}
         </div>
-        <button className="slot-remove" onClick={onRemove} title="Remover">✕</button>
+        <div className="slot-actions">
+          {!isThisMega && (
+            <button
+              className="slot-action-btn mega-btn"
+              onClick={onSetMega}
+              title="Definir como Mega"
+            >⚡ Mega</button>
+          )}
+          {isThisMega && (
+            <button
+              className="slot-action-btn unmega-btn"
+              onClick={onSetMega}
+              title="Remover Mega"
+            >✕ Mega</button>
+          )}
+          <button className="slot-remove" onClick={onRemove} title="Remover">🗑</button>
+        </div>
       </div>
     )
   }
@@ -35,21 +54,20 @@ function PokemonSlot({ pokemon, onSelect, onRemove }) {
   )
 }
 
-function formatName(name) {
-  return name.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-}
-
 export default function TeamsPage() {
   const [players] = useLocalStorage('poke-players', DEFAULT_PLAYERS)
-  const [teams, setTeams] = useLocalStorage('poke-teams', () =>
+  const [teams, setTeams] = useLocalStorage('poke-teams',
     Object.fromEntries(DEFAULT_PLAYERS.map(p => [p.id, Array(TEAM_SIZE).fill(null)]))
   )
-  const [picker, setPicker] = useState(null) // { playerId, slotIdx }
+  const [megaSlots, setMegaSlots] = useLocalStorage('poke-mega-slots',
+    Object.fromEntries(DEFAULT_PLAYERS.map(p => [p.id, null]))
+  )
+  const [picker, setPicker] = useState(null) // { playerId, slotIdx, megaMode }
   const [expanded, setExpanded] = useState(null)
   const [showReset, setShowReset] = useState(false)
 
-  const openPicker = (playerId, slotIdx) => {
-    setPicker({ playerId, slotIdx })
+  const openPicker = (playerId, slotIdx, megaMode = false) => {
+    setPicker({ playerId, slotIdx, megaMode })
   }
 
   const handleSelect = (pokemon) => {
@@ -68,14 +86,27 @@ export default function TeamsPage() {
       team[slotIdx] = null
       return { ...prev, [playerId]: team }
     })
+    // Se era o mega, limpa
+    if (megaSlots[playerId] === slotIdx) {
+      setMegaSlots(prev => ({ ...prev, [playerId]: null }))
+    }
+  }
+
+  const handleSetMega = (playerId, slotIdx) => {
+    setMegaSlots(prev => ({
+      ...prev,
+      [playerId]: prev[playerId] === slotIdx ? null : slotIdx
+    }))
   }
 
   const clearTeam = (playerId) => {
     setTeams(prev => ({ ...prev, [playerId]: Array(TEAM_SIZE).fill(null) }))
+    setMegaSlots(prev => ({ ...prev, [playerId]: null }))
   }
 
   const resetAllTeams = () => {
     setTeams(Object.fromEntries(players.map(p => [p.id, Array(TEAM_SIZE).fill(null)])))
+    setMegaSlots(Object.fromEntries(players.map(p => [p.id, null])))
     setShowReset(false)
   }
 
@@ -84,6 +115,8 @@ export default function TeamsPage() {
     if (!t || t.length !== TEAM_SIZE) return Array(TEAM_SIZE).fill(null)
     return t
   }
+
+  const getMegaSlot = (playerId) => megaSlots[playerId] ?? null
 
   const countPokemon = (playerId) => getTeam(playerId).filter(Boolean).length
 
@@ -99,14 +132,12 @@ export default function TeamsPage() {
           const team = getTeam(player.id)
           const count = countPokemon(player.id)
           const isOpen = expanded === player.id
+          const megaSlot = getMegaSlot(player.id)
+          const megaPokemon = megaSlot !== null ? team[megaSlot] : null
 
           return (
             <div key={player.id} className={`player-team-card ${isOpen ? 'open' : ''}`}>
-              {/* Player header */}
-              <button
-                className="player-team-header"
-                onClick={() => setExpanded(isOpen ? null : player.id)}
-              >
+              <button className="player-team-header" onClick={() => setExpanded(isOpen ? null : player.id)}>
                 <div className="player-team-info">
                   <div className="player-team-icon">
                     {player.icon
@@ -116,18 +147,17 @@ export default function TeamsPage() {
                   </div>
                   <div>
                     <div className="player-team-name">{player.name}</div>
-                    <div className="player-team-sub">{count}/{TEAM_SIZE} Pokémon</div>
+                    <div className="player-team-sub">
+                      {count}/{TEAM_SIZE} Pokémon
+                      {megaPokemon && <span className="header-mega-badge"> · ⚡ {formatName(megaPokemon.name)}</span>}
+                    </div>
                   </div>
                 </div>
 
-                {/* Mini preview */}
                 <div className="team-mini-preview">
                   {team.map((p, i) => (
-                    <div key={i} className="mini-slot">
-                      {p
-                        ? <img src={p.sprite} alt={p.name} className="mini-sprite" />
-                        : <div className="mini-empty" />
-                      }
+                    <div key={i} className={`mini-slot ${megaSlot === i ? 'mini-mega' : ''}`}>
+                      {p ? <img src={p.sprite} alt={p.name} className="mini-sprite" /> : <div className="mini-empty" />}
                     </div>
                   ))}
                 </div>
@@ -135,19 +165,30 @@ export default function TeamsPage() {
                 <div className="expand-icon">{isOpen ? '▲' : '▼'}</div>
               </button>
 
-              {/* Expanded content */}
               {isOpen && (
                 <div className="player-team-body">
+                  <div className="mega-info-row">
+                    <span className="mega-info-label">⚡ Mega Evolution: </span>
+                    {megaPokemon
+                      ? <span className="mega-info-value">{formatName(megaPokemon.name)}</span>
+                      : <span className="mega-info-none">Não definido — clique em "⚡ Mega" em um Pokémon</span>
+                    }
+                  </div>
+
                   <div className="team-slots-grid">
                     {team.map((pokemon, slotIdx) => (
                       <PokemonSlot
                         key={slotIdx}
                         pokemon={pokemon}
-                        onSelect={() => openPicker(player.id, slotIdx)}
+                        slotIdx={slotIdx}
+                        teamMegaIdx={megaSlot}
+                        onSelect={() => openPicker(player.id, slotIdx, false)}
                         onRemove={() => handleRemove(player.id, slotIdx)}
+                        onSetMega={() => handleSetMega(player.id, slotIdx)}
                       />
                     ))}
                   </div>
+
                   <div className="team-actions">
                     <button className="btn btn-ghost btn-sm" onClick={() => clearTeam(player.id)}>
                       🗑️ Limpar time
@@ -160,7 +201,6 @@ export default function TeamsPage() {
         })}
       </div>
 
-      {/* Global reset */}
       <div className="reset-section" style={{ marginTop: 32, textAlign: 'center' }}>
         {!showReset
           ? <button className="btn btn-ghost btn-sm" onClick={() => setShowReset(true)}>
@@ -176,11 +216,11 @@ export default function TeamsPage() {
         }
       </div>
 
-      {/* Picker modal */}
       {picker && (
         <PokemonPicker
           onSelect={handleSelect}
           onClose={() => setPicker(null)}
+          megaMode={picker.megaMode}
         />
       )}
     </div>

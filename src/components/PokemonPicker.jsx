@@ -1,157 +1,239 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { TYPE_COLORS, POKEMON_TYPES, GENERATIONS } from '../utils/data.js'
 import './PokemonPicker.css'
-
+ 
 const BASE_URL = 'https://pokeapi.co/api/v2'
 const PAGE_SIZE = 24
-
-export default function PokemonPicker({ onSelect, onClose }) {
+ 
+// Cache global para evitar refetch
+const cache = {}
+ 
+async function cachedFetch(url, signal) {
+  if (cache[url]) return cache[url]
+  const res = await fetch(url, { signal })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const data = await res.json()
+  cache[url] = data
+  return data
+}
+ 
+function extractId(url) {
+  const parts = url.replace(/\/$/, '').split('/')
+  return parseInt(parts[parts.length - 1])
+}
+ 
+export function formatName(name) {
+  return name.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+ 
+function formatPokemon(data) {
+  return {
+    id: data.id,
+    name: data.name,
+    sprite: data.sprites?.front_default || '',
+    types: data.types?.map(t => t.type.name) || [],
+  }
+}
+ 
+async function fetchBatch(ids, signal) {
+  const results = await Promise.allSettled(
+    ids.map(id => cachedFetch(`${BASE_URL}/pokemon/${id}`, signal).then(formatPokemon))
+  )
+  return results.filter(r => r.status === 'fulfilled').map(r => r.value)
+}
+ 
+async function checkHasMega(pokemonName) {
+  const baseName = pokemonName.split('-')[0]
+  const ctrl = new AbortController()
+  try {
+    await cachedFetch(`${BASE_URL}/pokemon/${baseName}-mega`, ctrl.signal)
+    return true
+  } catch {
+    try {
+      await cachedFetch(`${BASE_URL}/pokemon/${baseName}-mega-x`, ctrl.signal)
+      return true
+    } catch {
+      return false
+    }
+  }
+}
+ 
+export default function PokemonPicker({ onSelect, onClose, megaMode = false }) {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [genFilter, setGenFilter] = useState('')
   const [pokemon, setPokemon] = useState([])
   const [loading, setLoading] = useState(false)
-  const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const [total, setTotal] = useState(0)
-  const loaderRef = useRef(null)
+  const [checkingMega, setCheckingMega] = useState(null)
+ 
   const abortRef = useRef(null)
-
-  // Load list of pokemon IDs based on filters
-  useEffect(() => {
-    setPokemon([])
-    setPage(0)
-    setHasMore(true)
-  }, [search, typeFilter, genFilter])
-
-  useEffect(() => {
-    loadPage()
-  }, [page, search, typeFilter, genFilter])
-
-  const loadPage = useCallback(async () => {
+  const loaderRef = useRef(null)
+  const stateRef = useRef({ search: '', typeFilter: '', genFilter: '', page: 0, loading: false, hasMore: true })
+ 
+  const doLoad = useCallback(async ({ search: s, typeFilter: tf, genFilter: gf, page: pg, append }) => {
     if (abortRef.current) abortRef.current.abort()
     const ctrl = new AbortController()
     abortRef.current = ctrl
-
+ 
+    stateRef.current.loading = true
     setLoading(true)
+ 
     try {
       let results = []
-
-      if (search.trim()) {
-        // Search by name
-        const name = search.trim().toLowerCase()
+      let more = false
+      let tot = 0
+ 
+      if (s.trim()) {
         try {
-          const res = await fetch(`${BASE_URL}/pokemon/${name}`, { signal: ctrl.signal })
-          if (res.ok) {
-            const data = await res.json()
-            results = [formatPokemon(data)]
-          }
-          setHasMore(false)
-          setTotal(results.length)
-        } catch { results = []; setHasMore(false); setTotal(0) }
-      } else if (typeFilter) {
-        // Filter by type
-        const res = await fetch(`${BASE_URL}/type/${typeFilter}`, { signal: ctrl.signal })
-        const data = await res.json()
-        let ids = data.pokemon.map(p => extractId(p.pokemon.url))
-        if (genFilter) {
-          const gen = GENERATIONS[parseInt(genFilter)]
+          const data = await cachedFetch(`${BASE_URL}/pokemon/${s.trim().toLowerCase()}`, ctrl.signal)
+          results = [formatPokemon(data)]
+          tot = 1
+        } catch { results = []; tot = 0 }
+        more = false
+ 
+      } else if (tf) {
+        const typeData = await cachedFetch(`${BASE_URL}/type/${tf}`, ctrl.signal)
+        let ids = typeData.pokemon.map(p => extractId(p.pokemon.url)).filter(id => id <= 1025)
+        if (gf !== '') {
+          const gen = GENERATIONS[parseInt(gf)]
           ids = ids.filter(id => id >= gen.min && id <= gen.max)
         }
-        setTotal(ids.length)
-        const pageIds = ids.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
-        setHasMore((page + 1) * PAGE_SIZE < ids.length)
+        tot = ids.length
+        const pageIds = ids.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+        more = (pg + 1) * PAGE_SIZE < ids.length
         results = await fetchBatch(pageIds, ctrl.signal)
-      } else if (genFilter) {
-        const gen = GENERATIONS[parseInt(genFilter)]
-        const count = gen.max - gen.min + 1
-        setTotal(count)
-        const allIds = Array.from({ length: count }, (_, i) => gen.min + i)
-        const pageIds = allIds.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
-        setHasMore((page + 1) * PAGE_SIZE < count)
+ 
+      } else if (gf !== '') {
+        const gen = GENERATIONS[parseInt(gf)]
+        tot = gen.max - gen.min + 1
+        const allIds = Array.from({ length: tot }, (_, i) => gen.min + i)
+        const pageIds = allIds.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+        more = (pg + 1) * PAGE_SIZE < tot
         results = await fetchBatch(pageIds, ctrl.signal)
+ 
       } else {
-        // All pokemon paginated
-        const offset = page * PAGE_SIZE
-        const res = await fetch(`${BASE_URL}/pokemon?limit=${PAGE_SIZE}&offset=${offset}`, { signal: ctrl.signal })
-        const data = await res.json()
-        setTotal(data.count)
-        setHasMore(offset + PAGE_SIZE < data.count)
-        const ids = data.results.map(p => extractId(p.url))
+        const offset = pg * PAGE_SIZE
+        const listData = await cachedFetch(`${BASE_URL}/pokemon?limit=${PAGE_SIZE}&offset=${offset}`, ctrl.signal)
+        tot = listData.count
+        more = offset + PAGE_SIZE < listData.count
+        const ids = listData.results.map(p => extractId(p.url))
         results = await fetchBatch(ids, ctrl.signal)
       }
-
-      setPokemon(prev => page === 0 ? results : [...prev, ...results])
+ 
+      if (!ctrl.signal.aborted) {
+        setTotal(tot)
+        stateRef.current.hasMore = more
+        setHasMore(more)
+        setPokemon(prev => append ? [...prev, ...results] : results)
+      }
     } catch (e) {
       if (e.name !== 'AbortError') console.error(e)
     } finally {
-      setLoading(false)
+      if (!ctrl.signal.aborted) {
+        stateRef.current.loading = false
+        setLoading(false)
+      }
     }
-  }, [page, search, typeFilter, genFilter])
-
-  // Infinite scroll
+  }, [])
+ 
+  // Carga inicial UMA vez
   useEffect(() => {
-    if (!loaderRef.current) return
-    const obs = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore && !loading) {
-        setPage(p => p + 1)
+    doLoad({ search: '', typeFilter: '', genFilter: '', page: 0, append: false })
+    return () => { if (abortRef.current) abortRef.current.abort() }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+ 
+  // Infinite scroll via IntersectionObserver
+  useEffect(() => {
+    const el = loaderRef.current
+    if (!el) return
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && stateRef.current.hasMore && !stateRef.current.loading) {
+        const s = stateRef.current
+        const nextPage = s.page + 1
+        stateRef.current.page = nextPage
+        doLoad({ search: s.search, typeFilter: s.typeFilter, genFilter: s.genFilter, page: nextPage, append: true })
       }
     }, { threshold: 0.1 })
-    obs.observe(loaderRef.current)
+    obs.observe(el)
     return () => obs.disconnect()
-  }, [hasMore, loading])
-
+  }, [doLoad])
+ 
+  const applyFilters = useCallback((patch) => {
+    const next = { ...stateRef.current, ...patch, page: 0 }
+    stateRef.current = { ...next, loading: false, hasMore: true }
+    setHasMore(true)
+    setPokemon([])
+    doLoad({ ...next, append: false })
+  }, [doLoad])
+ 
+  const handleSearchChange = (e) => {
+    const val = e.target.value
+    setSearch(val)
+    applyFilters({ search: val })
+  }
+ 
+  const handleTypeChange = (e) => {
+    const val = e.target.value
+    setTypeFilter(val)
+    applyFilters({ typeFilter: val })
+  }
+ 
+  const handleGenChange = (e) => {
+    const val = e.target.value
+    setGenFilter(val)
+    applyFilters({ genFilter: val })
+  }
+ 
+  const handlePokemonClick = async (p) => {
+    if (!megaMode) { onSelect(p); return }
+    setCheckingMega(p.id)
+    const hasMega = await checkHasMega(p.name)
+    setCheckingMega(null)
+    if (hasMega) {
+      onSelect({ ...p, isMegaCandidate: true })
+    } else {
+      alert(`${formatName(p.name)} não possui Mega Evolução disponível na PokéAPI.`)
+    }
+  }
+ 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box picker-modal">
-        {/* Header */}
+    <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="modal-box picker-modal" onMouseDown={e => e.stopPropagation()}>
         <div className="picker-header">
-          <h2 className="picker-title">🔍 Escolher Pokémon</h2>
+          <h2 className="picker-title">
+            {megaMode ? '⚡ Escolher Mega Pokémon' : '🔍 Escolher Pokémon'}
+          </h2>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>✕ Fechar</button>
         </div>
-
+ 
+        {megaMode && (
+          <div className="mega-warning">
+            ⚡ Apenas Pokémon com Mega Evolução podem ser selecionados. A verificação é feita automaticamente.
+          </div>
+        )}
+ 
         {total > 0 && <div className="picker-count">{total} Pokémon encontrados</div>}
-
-        {/* Filters */}
+ 
         <div className="picker-filters">
-          <input
-            className="poke-input"
-            placeholder="🔍 Buscar por nome..."
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(0); setPokemon([]); setHasMore(true) }}
-          />
-          <select
-            className="poke-select"
-            value={typeFilter}
-            onChange={e => { setTypeFilter(e.target.value); setPage(0); setPokemon([]); setHasMore(true) }}
-          >
+          <input className="poke-input" placeholder="🔍 Buscar por nome..." value={search} onChange={handleSearchChange} />
+          <select className="poke-select" value={typeFilter} onChange={handleTypeChange}>
             <option value="">Todos os tipos</option>
-            {POKEMON_TYPES.map(t => (
-              <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
-            ))}
+            {POKEMON_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
           </select>
-          <select
-            className="poke-select"
-            value={genFilter}
-            onChange={e => { setGenFilter(e.target.value); setPage(0); setPokemon([]); setHasMore(true) }}
-          >
+          <select className="poke-select" value={genFilter} onChange={handleGenChange}>
             <option value="">Todas as gerações</option>
-            {GENERATIONS.map((g, i) => (
-              <option key={i} value={i}>{g.label}</option>
-            ))}
+            {GENERATIONS.map((g, i) => <option key={i} value={i}>{g.label}</option>)}
           </select>
         </div>
-
-        {/* Grid */}
+ 
         <div className="picker-grid">
           {pokemon.map(p => (
-            <button key={p.id} className="poke-card" onClick={() => onSelect(p)}>
-              <img
-                src={p.sprite}
-                alt={p.name}
-                className="poke-card-img"
-                loading="lazy"
-              />
+            <button key={p.id} className={`poke-card ${checkingMega === p.id ? 'checking' : ''}`}
+              onClick={() => handlePokemonClick(p)} disabled={checkingMega !== null}>
+              {checkingMega === p.id && <div className="checking-overlay">⚡</div>}
+              <img src={p.sprite} alt={p.name} className="poke-card-img" loading="lazy" />
               <div className="poke-card-id">#{String(p.id).padStart(3, '0')}</div>
               <div className="poke-card-name">{formatName(p.name)}</div>
               <div className="poke-card-types">
@@ -161,57 +243,22 @@ export default function PokemonPicker({ onSelect, onClose }) {
               </div>
             </button>
           ))}
-
           {loading && Array.from({ length: 6 }).map((_, i) => (
-            <div key={`skel-${i}`} className="poke-card skeleton-card">
+            <div key={`sk-${i}`} className="poke-card skeleton-card">
               <div className="skeleton" style={{ width: 72, height: 72, borderRadius: '50%', margin: '0 auto 8px' }} />
               <div className="skeleton" style={{ width: '70%', height: 12, margin: '0 auto 6px' }} />
               <div className="skeleton" style={{ width: '50%', height: 10, margin: '0 auto' }} />
             </div>
           ))}
         </div>
-
+ 
         {!loading && pokemon.length === 0 && (
-          <div className="picker-empty">
-            <span>😕</span>
-            <p>Nenhum Pokémon encontrado</p>
-          </div>
+          <div className="picker-empty"><span>😕</span><p>Nenhum Pokémon encontrado</p></div>
         )}
-
+ 
         <div ref={loaderRef} style={{ height: 20 }} />
-
-        {!hasMore && pokemon.length > 0 && (
-          <div className="picker-end">— Fim da lista —</div>
-        )}
+        {!hasMore && pokemon.length > 0 && <div className="picker-end">— Fim da lista —</div>}
       </div>
     </div>
   )
-}
-
-// Helpers
-function extractId(url) {
-  const parts = url.replace(/\/$/, '').split('/')
-  return parseInt(parts[parts.length - 1])
-}
-
-async function fetchBatch(ids, signal) {
-  const results = await Promise.allSettled(
-    ids.map(id => fetch(`https://pokeapi.co/api/v2/pokemon/${id}`, { signal }).then(r => r.json()))
-  )
-  return results
-    .filter(r => r.status === 'fulfilled')
-    .map(r => formatPokemon(r.value))
-}
-
-function formatPokemon(data) {
-  return {
-    id: data.id,
-    name: data.name,
-    sprite: data.sprites?.front_default || data.sprites?.other?.['official-artwork']?.front_default || '',
-    types: data.types?.map(t => t.type.name) || [],
-  }
-}
-
-function formatName(name) {
-  return name.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 }

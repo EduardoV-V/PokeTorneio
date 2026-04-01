@@ -16,10 +16,10 @@ function App() {
             </div>
             <nav className="main-nav">
               <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-                🏆 Torneio
+                Torneio
               </NavLink>
               <NavLink to="/times" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-                👾 Times
+                Times
               </NavLink>
             </nav>
           </div>
@@ -33,7 +33,7 @@ function App() {
         </main>
 
         <footer className="app-footer">
-          <p>⚡ Torneio Pokémon · Dados salvos localmente · Não afiliado à The Pokémon Company</p>
+          <p>Torneio Pokémon do LAINF</p>
         </footer>
       </div>
     </BrowserRouter>
