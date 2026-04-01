@@ -1,5 +1,12 @@
-import React, { useState } from 'react'
-import { useLocalStorage } from '../hooks/useLocalStorage.js'
+import React, { useState, useEffect, useCallback } from 'react'
+import { supabase } from '../utils/supabase.js'
+import {
+  fetchPlayers, upsertPlayer,
+  fetchTeams, fetchMegaSlots,
+  upsertSlot, clearTeam as dbClearTeam,
+  setMegaSlot as dbSetMegaSlot,
+  upsertAllTeams,
+} from '../utils/db.js'
 import { DEFAULT_PLAYERS, TYPE_COLORS } from '../utils/data.js'
 import PokemonPicker from '../components/PokemonPicker.jsx'
 import './TeamsPage.css'
@@ -10,8 +17,7 @@ function formatName(name) {
   return name.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 }
 
-function PokemonSlot({ pokemon, isMega, onSelect, onRemove, onSetMega, slotIdx, teamMegaIdx }) {
-  const hasMegaSet = teamMegaIdx !== null && teamMegaIdx !== undefined
+function PokemonSlot({ pokemon, slotIdx, teamMegaIdx, onSelect, onRemove, onSetMega }) {
   const isThisMega = teamMegaIdx === slotIdx
 
   if (pokemon) {
@@ -27,18 +33,14 @@ function PokemonSlot({ pokemon, isMega, onSelect, onRemove, onSetMega, slotIdx, 
         </div>
         <div className="slot-actions">
           {!isThisMega && (
-            <button
-              className="slot-action-btn mega-btn"
-              onClick={onSetMega}
-              title="Definir como Mega"
-            >⚡ Mega</button>
+            <button className="slot-action-btn mega-btn" onClick={onSetMega} title="Definir como Mega">
+              ⚡ Mega
+            </button>
           )}
           {isThisMega && (
-            <button
-              className="slot-action-btn unmega-btn"
-              onClick={onSetMega}
-              title="Remover Mega"
-            >✕ Mega</button>
+            <button className="slot-action-btn unmega-btn" onClick={onSetMega} title="Remover Mega">
+              ✕ Mega
+            </button>
           )}
           <button className="slot-remove" onClick={onRemove} title="Remover">🗑</button>
         </div>
@@ -55,70 +57,162 @@ function PokemonSlot({ pokemon, isMega, onSelect, onRemove, onSetMega, slotIdx, 
 }
 
 export default function TeamsPage() {
-  const [players] = useLocalStorage('poke-players', DEFAULT_PLAYERS)
-  const [teams, setTeams] = useLocalStorage('poke-teams',
-    Object.fromEntries(DEFAULT_PLAYERS.map(p => [p.id, Array(TEAM_SIZE).fill(null)]))
-  )
-  const [megaSlots, setMegaSlots] = useLocalStorage('poke-mega-slots',
-    Object.fromEntries(DEFAULT_PLAYERS.map(p => [p.id, null]))
-  )
-  const [picker, setPicker] = useState(null) // { playerId, slotIdx, megaMode }
+  const [players, setPlayersState] = useState(null)
+  const [teams, setTeamsState] = useState(null)       // { [playerId]: Array(9) }
+  const [megaSlots, setMegaSlotsState] = useState(null) // { [playerId]: slotIdx | null }
+  const [loading, setLoading] = useState(true)
+  const [picker, setPicker] = useState(null)           // { playerId, slotIdx, megaMode }
   const [expanded, setExpanded] = useState(null)
   const [showReset, setShowReset] = useState(false)
 
-  const openPicker = (playerId, slotIdx, megaMode = false) => {
-    setPicker({ playerId, slotIdx, megaMode })
-  }
+  // ── initial load ─────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false
+    fetchPlayers().then(async p => {
+      if (cancelled) return
+      const ids = p.map(x => x.id)
+      const [t, m] = await Promise.all([fetchTeams(ids), fetchMegaSlots(ids)])
+      if (cancelled) return
+      setPlayersState(p)
+      setTeamsState(t)
+      setMegaSlotsState(m)
+      setLoading(false)
+    }).catch(err => {
+      console.error('TeamsPage load error:', err)
+      if (!cancelled) setLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [])
 
-  const handleSelect = (pokemon) => {
+  // ── realtime: players ────────────────────────────────────
+  useEffect(() => {
+    const ch = supabase
+      .channel('teams-players')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, () => {
+        fetchPlayers().then(setPlayersState).catch(console.error)
+      })
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [])
+
+  // ── realtime: teams ──────────────────────────────────────
+  useEffect(() => {
+    const ch = supabase
+      .channel('teams-slots')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => {
+        if (!players) return
+        const ids = players.map(x => x.id)
+        Promise.all([fetchTeams(ids), fetchMegaSlots(ids)])
+          .then(([t, m]) => { setTeamsState(t); setMegaSlotsState(m) })
+          .catch(console.error)
+      })
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [players])
+
+  // ── helpers ───────────────────────────────────────────────
+  const getTeam = useCallback((playerId) => {
+    const t = teams?.[playerId]
+    if (!t || t.length !== TEAM_SIZE) return Array(TEAM_SIZE).fill(null)
+    return t
+  }, [teams])
+
+  const getMegaSlot = useCallback((playerId) => megaSlots?.[playerId] ?? null, [megaSlots])
+
+  // ── add pokemon ───────────────────────────────────────────
+  const handleSelect = useCallback(async (pokemon) => {
     const { playerId, slotIdx } = picker
-    setTeams(prev => {
-      const team = [...(prev[playerId] || Array(TEAM_SIZE).fill(null))]
+    setPicker(null)
+
+    // optimistic update
+    setTeamsState(prev => {
+      const team = [...(prev[playerId] ?? Array(TEAM_SIZE).fill(null))]
       team[slotIdx] = pokemon
       return { ...prev, [playerId]: team }
     })
-    setPicker(null)
-  }
 
-  const handleRemove = (playerId, slotIdx) => {
-    setTeams(prev => {
-      const team = [...(prev[playerId] || Array(TEAM_SIZE).fill(null))]
+    try {
+      await upsertSlot(playerId, slotIdx, pokemon)
+    } catch (err) {
+      console.error('upsertSlot error:', err)
+    }
+  }, [picker])
+
+  // ── remove pokemon ────────────────────────────────────────
+  const handleRemove = useCallback(async (playerId, slotIdx) => {
+    // optimistic update
+    setTeamsState(prev => {
+      const team = [...(prev[playerId] ?? Array(TEAM_SIZE).fill(null))]
       team[slotIdx] = null
       return { ...prev, [playerId]: team }
     })
-    // Se era o mega, limpa
-    if (megaSlots[playerId] === slotIdx) {
-      setMegaSlots(prev => ({ ...prev, [playerId]: null }))
+
+    // clear mega if it was this slot
+    if (megaSlots?.[playerId] === slotIdx) {
+      setMegaSlotsState(prev => ({ ...prev, [playerId]: null }))
+      try { await dbSetMegaSlot(playerId, null) } catch (err) { console.error(err) }
     }
-  }
 
-  const handleSetMega = (playerId, slotIdx) => {
-    setMegaSlots(prev => ({
-      ...prev,
-      [playerId]: prev[playerId] === slotIdx ? null : slotIdx
-    }))
-  }
+    try {
+      await upsertSlot(playerId, slotIdx, null)
+    } catch (err) {
+      console.error('upsertSlot (remove) error:', err)
+    }
+  }, [megaSlots])
 
-  const clearTeam = (playerId) => {
-    setTeams(prev => ({ ...prev, [playerId]: Array(TEAM_SIZE).fill(null) }))
-    setMegaSlots(prev => ({ ...prev, [playerId]: null }))
-  }
+  // ── set mega ──────────────────────────────────────────────
+  const handleSetMega = useCallback(async (playerId, slotIdx) => {
+    const current = megaSlots?.[playerId]
+    const next = current === slotIdx ? null : slotIdx
 
-  const resetAllTeams = () => {
-    setTeams(Object.fromEntries(players.map(p => [p.id, Array(TEAM_SIZE).fill(null)])))
-    setMegaSlots(Object.fromEntries(players.map(p => [p.id, null])))
+    setMegaSlotsState(prev => ({ ...prev, [playerId]: next }))
+
+    try {
+      await dbSetMegaSlot(playerId, next)
+    } catch (err) {
+      console.error('setMegaSlot error:', err)
+    }
+  }, [megaSlots])
+
+  // ── clear team ────────────────────────────────────────────
+  const handleClearTeam = useCallback(async (playerId) => {
+    setTeamsState(prev => ({ ...prev, [playerId]: Array(TEAM_SIZE).fill(null) }))
+    setMegaSlotsState(prev => ({ ...prev, [playerId]: null }))
+
+    try {
+      await dbClearTeam(playerId)
+    } catch (err) {
+      console.error('clearTeam error:', err)
+    }
+  }, [])
+
+  // ── reset all ─────────────────────────────────────────────
+  const resetAllTeams = useCallback(async () => {
+    const emptyTeams = Object.fromEntries((players ?? []).map(p => [p.id, Array(TEAM_SIZE).fill(null)]))
+    const emptyMegas = Object.fromEntries((players ?? []).map(p => [p.id, null]))
+    setTeamsState(emptyTeams)
+    setMegaSlotsState(emptyMegas)
     setShowReset(false)
+
+    try {
+      await upsertAllTeams(emptyTeams, emptyMegas)
+    } catch (err) {
+      console.error('resetAllTeams error:', err)
+    }
+  }, [players])
+
+  // ── loading ───────────────────────────────────────────────
+  if (loading || !players || !teams || !megaSlots) {
+    return (
+      <div className="teams-page">
+        <div className="page-title"><span>👾</span><span>TIMES</span></div>
+        <div className="loading-state">
+          <div className="loading-pokeball">⚽</div>
+          <p>Carregando times...</p>
+        </div>
+      </div>
+    )
   }
-
-  const getTeam = (playerId) => {
-    const t = teams[playerId]
-    if (!t || t.length !== TEAM_SIZE) return Array(TEAM_SIZE).fill(null)
-    return t
-  }
-
-  const getMegaSlot = (playerId) => megaSlots[playerId] ?? null
-
-  const countPokemon = (playerId) => getTeam(playerId).filter(Boolean).length
 
   return (
     <div className="teams-page">
@@ -130,7 +224,7 @@ export default function TeamsPage() {
       <div className="teams-list">
         {players.map(player => {
           const team = getTeam(player.id)
-          const count = countPokemon(player.id)
+          const count = team.filter(Boolean).length
           const isOpen = expanded === player.id
           const megaSlot = getMegaSlot(player.id)
           const megaPokemon = megaSlot !== null ? team[megaSlot] : null
@@ -182,7 +276,7 @@ export default function TeamsPage() {
                         pokemon={pokemon}
                         slotIdx={slotIdx}
                         teamMegaIdx={megaSlot}
-                        onSelect={() => openPicker(player.id, slotIdx, false)}
+                        onSelect={() => setPicker({ playerId: player.id, slotIdx, megaMode: false })}
                         onRemove={() => handleRemove(player.id, slotIdx)}
                         onSetMega={() => handleSetMega(player.id, slotIdx)}
                       />
@@ -190,7 +284,7 @@ export default function TeamsPage() {
                   </div>
 
                   <div className="team-actions">
-                    <button className="btn btn-ghost btn-sm" onClick={() => clearTeam(player.id)}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => handleClearTeam(player.id)}>
                       🗑️ Limpar time
                     </button>
                   </div>

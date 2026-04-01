@@ -6,6 +6,23 @@
   gap: 12px;
 }
 
+/* Loading state */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  gap: 16px;
+  color: var(--gray-mid);
+  font-weight: 700;
+}
+
+.loading-pokeball {
+  font-size: 3rem;
+  animation: spin 1s linear infinite;
+}
+
 /* ===== PLAYER TEAM CARD ===== */
 .player-team-card {
   background: rgba(255,255,255,0.04);
@@ -82,6 +99,10 @@
   font-weight: 600;
 }
 
+.header-mega-badge {
+  color: var(--yellow);
+}
+
 /* ===== MINI PREVIEW ===== */
 .team-mini-preview {
   display: flex;
@@ -101,6 +122,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.mini-slot.mini-mega {
+  border-color: var(--yellow);
+  box-shadow: 0 0 6px rgba(255,203,5,0.4);
 }
 
 .mini-sprite {
@@ -136,11 +162,26 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ===== MEGA INFO ===== */
+.mega-info-row {
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  background: rgba(255,203,5,0.06);
+  border: 1px solid rgba(255,203,5,0.18);
+  border-radius: var(--border-radius-sm);
+}
+
+.mega-info-label { color: var(--gray-mid); }
+.mega-info-value { color: var(--yellow); margin-left: 6px; }
+.mega-info-none  { color: var(--gray-dark); margin-left: 6px; font-weight: 600; font-style: italic; }
+
 /* ===== SLOTS GRID ===== */
 .team-slots-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 14px;
   margin-bottom: 16px;
 }
 
@@ -149,7 +190,7 @@
   border-radius: var(--border-radius);
   position: relative;
   transition: all 0.15s ease;
-  min-height: 130px;
+  min-height: 165px;          /* ↑ was 130px */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -174,7 +215,7 @@
 }
 
 .slot-plus {
-  font-size: 1.8rem;
+  font-size: 2.2rem;           /* ↑ was 1.8rem */
   color: var(--gray-dark);
   transition: color 0.15s;
   line-height: 1;
@@ -191,8 +232,8 @@
 .pokemon-slot.filled {
   background: rgba(255,255,255,0.05);
   border: 2px solid rgba(255,255,255,0.1);
-  padding: 10px 8px;
-  gap: 4px;
+  padding: 12px 8px;
+  gap: 5px;
 }
 
 .pokemon-slot.filled:hover {
@@ -200,9 +241,31 @@
   background: rgba(255,255,255,0.08);
 }
 
+.pokemon-slot.is-mega {
+  border-color: var(--yellow) !important;
+  background: rgba(255,203,5,0.08) !important;
+  box-shadow: 0 0 14px rgba(255,203,5,0.25);
+}
+
+.mega-badge {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--yellow);
+  color: var(--black);
+  font-size: 0.55rem;
+  font-weight: 900;
+  padding: 2px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* ↑ BIGGER SPRITE */
 .slot-sprite {
-  width: 72px;
-  height: 72px;
+  width: 96px;                 /* ↑ was 72px */
+  height: 96px;                /* ↑ was 72px */
   object-fit: contain;
   image-rendering: pixelated;
   transition: transform 0.2s;
@@ -213,7 +276,7 @@
 
 .slot-name {
   font-weight: 800;
-  font-size: 0.78rem;
+  font-size: 0.80rem;
   color: white;
   text-align: center;
   line-height: 1.2;
@@ -226,9 +289,48 @@
   justify-content: center;
 }
 .slot-types .type-badge {
-  font-size: 0.5rem;
-  padding: 1px 5px;
+  font-size: 0.52rem;
+  padding: 1px 6px;
 }
+
+/* ===== SLOT ACTIONS ===== */
+.slot-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.pokemon-slot.filled:hover .slot-actions { opacity: 1; }
+
+.slot-action-btn {
+  font-size: 0.6rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 20px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.mega-btn {
+  background: rgba(255,203,5,0.2);
+  color: var(--yellow);
+  border: 1px solid rgba(255,203,5,0.4) !important;
+  border: none;
+}
+.mega-btn:hover { background: rgba(255,203,5,0.35); }
+
+.unmega-btn {
+  background: rgba(231,76,60,0.15);
+  color: #e74c3c;
+  border: 1px solid rgba(231,76,60,0.35) !important;
+  border: none;
+}
+.unmega-btn:hover { background: rgba(231,76,60,0.3); }
 
 .slot-remove {
   position: absolute;
@@ -277,4 +379,5 @@
   .player-team-info { min-width: 120px; }
   .team-mini-preview { display: none; }
   .team-slots-grid { grid-template-columns: repeat(3, 1fr); }
+  .slot-sprite { width: 80px; height: 80px; }
 }

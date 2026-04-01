@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { getSortedPlayers } from '../utils/data.js'
+import { upsertPlayer } from '../utils/db.js'
 import './Standings.css'
 
 const MEDAL = ['🥇', '🥈', '🥉']
@@ -42,9 +43,10 @@ export default function Standings({ players, setPlayers, onStartBracket }) {
     if (!file) return
     const reader = new FileReader()
     reader.onload = (e) => {
-      setPlayers(prev => prev.map(p =>
-        p.id === id ? { ...p, icon: e.target.result } : p
-      ))
+      const icon = e.target.result
+      setPlayers(prev => prev.map(p => p.id === id ? { ...p, icon } : p))
+      // Also write directly so the icon isn't batched with other updates
+      upsertPlayer({ ...players.find(p => p.id === id), icon }).catch(console.error)
     }
     reader.readAsDataURL(file)
   }
