@@ -130,19 +130,25 @@ export default function BracketVisual({ players, bracket, setBracket }) {
 
         {/* FINAL */}
         <div className="bv-pos bv-f1">
-          <PlayerCard
+        <PlayerCard
             player={semis[0].winner}
-            clickable={finalClickable}
+            clickable={finalClickable && !!semis[0].winner}
             onClick={() => setFinalWinner(semis[0].winner)}
-          />
+
+            isWinner={champion?.id === semis[0].winner?.id}
+            isLoser={champion && champion.id !== semis[0].winner?.id}
+        />
         </div>
 
         <div className="bv-pos bv-f2">
-          <PlayerCard
+        <PlayerCard
             player={semis[1].winner}
-            clickable={finalClickable}
+            clickable={finalClickable && !!semis[1].winner}
             onClick={() => setFinalWinner(semis[1].winner)}
-          />
+
+            isWinner={champion?.id === semis[1].winner?.id}
+            isLoser={champion && champion.id !== semis[1].winner?.id}
+        />
         </div>
 
         {/* CAMPEÃO */}

@@ -43,21 +43,24 @@
   --bv-gap: 17.5%;
 }
 
-/* brilho */
 .bv-board::before {
   content: '';
   position: absolute;
   inset: 0;
+
   background:
     radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), transparent 60%),
-    radial-gradient(circle at 70% 70%, rgba(255,255,255,0.1), transparent 50%);
+    radial-gradient(circle at 70% 70%, rgba(255,255,255,0.1), transparent 50%),
+    rgba(255,255,255,0.08);
+
+  pointer-events: none;
+  z-index: 1;
 }
 
-/* ===== POSICIONAMENTO BASE ===== */
 .bv-pos {
   position: absolute;
+  left: 50%;
   transform: translate(-50%, -50%);
-    left: 50%;
   z-index: 2;
 }
 
