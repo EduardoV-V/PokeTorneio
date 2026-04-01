@@ -84,14 +84,33 @@ export default function PokemonPicker({ onSelect, onClose, megaMode = false }) {
       let results = []
       let more = false
       let tot = 0
- 
+
       if (s.trim()) {
-        try {
-          const data = await cachedFetch(`${BASE_URL}/pokemon/${s.trim().toLowerCase()}`, ctrl.signal)
-          results = [formatPokemon(data)]
-          tot = 1
-        } catch { results = []; tot = 0 }
-        more = false
+        const query = s.trim().toLowerCase()
+
+        // 🔥 busca lista completa (cacheado depois da primeira vez)
+        const listData = await cachedFetch(`${BASE_URL}/pokemon?limit=1025`, ctrl.signal)
+
+        let filtered = listData.results.filter(p =>
+          p.name.startsWith(query)
+        )
+
+        // filtro por geração também
+        if (gf !== '') {
+          const gen = GENERATIONS[parseInt(gf)]
+          filtered = filtered.filter(p => {
+            const id = extractId(p.url)
+            return id >= gen.min && id <= gen.max
+          })
+        }
+
+        tot = filtered.length
+
+        const pageSlice = filtered.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+        more = (pg + 1) * PAGE_SIZE < filtered.length
+
+        const ids = pageSlice.map(p => extractId(p.url))
+        results = await fetchBatch(ids, ctrl.signal)
  
       } else if (tf) {
         const typeData = await cachedFetch(`${BASE_URL}/type/${tf}`, ctrl.signal)
