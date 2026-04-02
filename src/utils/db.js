@@ -206,3 +206,34 @@ export async function upsertBracket(bracketData) {
 
   if (error) throw error
 }
+
+/**
+ * Busca o objeto de confrontos da tabela `matchups` (linha id=1).
+ * Retorna {} se ainda não houver dados.
+ */
+export async function fetchMatchups() {
+  const { data, error } = await supabase
+    .from('matchups')
+    .select('data')
+    .eq('id', 1)
+    .single()
+ 
+  if (error) throw error
+  return data?.data ?? {}
+}
+ 
+/**
+ * Persiste o objeto de confrontos.
+ */
+export async function upsertMatchups(matchupsData) {
+  const { error } = await supabase
+    .from('matchups')
+    .upsert({
+      id: 1,
+      data: matchupsData,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'id' })
+ 
+  if (error) throw error
+}
+ 

@@ -17,11 +17,7 @@
   color: var(--gray-mid);
   font-weight: 700;
 }
-
-.loading-pokeball {
-  font-size: 3rem;
-  animation: spin 1s linear infinite;
-}
+.loading-pokeball { font-size: 3rem; animation: spin 1s linear infinite; }
 
 /* ===== PLAYER TEAM CARD ===== */
 .player-team-card {
@@ -31,7 +27,6 @@
   overflow: hidden;
   transition: border-color 0.2s;
 }
-
 .player-team-card.open {
   border-color: rgba(61,125,202,0.4);
   box-shadow: 0 0 20px rgba(61,125,202,0.1);
@@ -42,33 +37,34 @@
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 16px 20px;
+  gap: 16px;
+  padding: 14px 20px;
   background: transparent;
   border: none;
   cursor: pointer;
   transition: background 0.15s;
   text-align: left;
 }
+.player-team-header:hover { background: rgba(255,255,255,0.04); }
 
-.player-team-header:hover {
-  background: rgba(255,255,255,0.04);
-}
+/*
+  Layout do header:
+  [ ícone + nome/sub ]  →  [ mini-sprites ]  [ ▼ ]
 
+  .player-team-info: cresce o quanto precisar (flex:1), sem truncar nada
+  .team-mini-preview: empurrado para a direita com margin-left:auto
+*/
 .player-team-info {
   display: flex;
   align-items: center;
-  gap: 14px;
-  /* largura fixa — a coluna esquerda nunca cresce nem encolhe */
-  width: 200px;
-  flex-shrink: 0;
-  flex-grow: 0;
-  min-width: 0;
+  gap: 12px;
+  /* cresce livremente, empurra o mini-preview para a direita */
+  flex: 0 0 auto;
 }
 
 .player-team-icon {
-  width: 48px;
-  height: 48px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
   overflow: hidden;
   border: 2px solid rgba(255,255,255,0.15);
@@ -87,44 +83,32 @@
   color: white;
 }
 
-.player-team-text {
-  min-width: 0;
-  flex: 1;
-}
+.player-team-text { display: flex; flex-direction: column; gap: 2px; }
 
-.player-team-name {
-  font-weight: 900;
-  font-size: 1.05rem;
-  color: white;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.player-team-name { font-weight: 900; font-size: 1.05rem; color: white; white-space: nowrap; }
 
 .player-team-sub {
   font-size: 0.78rem;
   color: var(--gray-mid);
-  margin-top: 2px;
   font-weight: 600;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-
 .header-mega-badge { color: var(--yellow); }
 
-/* ===== MINI PREVIEW ===== */
+/* ===== MINI PREVIEW =====
+   margin-left:auto empurra para a direita, flex-shrink:0 mantém tamanho fixo
+*/
 .team-mini-preview {
   display: flex;
   gap: 4px;
-  flex: 1;
-  flex-wrap: wrap;
-  justify-content: center;
+  flex-wrap: nowrap;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .mini-slot {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border-radius: 6px;
   overflow: hidden;
   background: rgba(255,255,255,0.05);
@@ -132,31 +116,21 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
-
 .mini-slot.mini-mega {
   border-color: var(--yellow);
   box-shadow: 0 0 6px rgba(255,203,5,0.4);
 }
-
 .mini-sprite {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   object-fit: contain;
   image-rendering: pixelated;
 }
+.mini-empty { width: 100%; height: 100%; background: rgba(255,255,255,0.03); }
 
-.mini-empty {
-  width: 100%;
-  height: 100%;
-  background: rgba(255,255,255,0.03);
-}
-
-.expand-icon {
-  color: var(--gray-mid);
-  font-size: 0.75rem;
-  flex-shrink: 0;
-}
+.expand-icon { color: var(--gray-mid); font-size: 0.75rem; flex-shrink: 0; margin-left: 8px; }
 
 /* ===== BODY ===== */
 .player-team-body {
@@ -165,7 +139,6 @@
   background: rgba(0,0,0,0.15);
   animation: slideDown 0.2s ease;
 }
-
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -181,7 +154,6 @@
   border: 1px solid rgba(255,203,5,0.18);
   border-radius: var(--border-radius-sm);
 }
-
 .mega-info-label { color: var(--gray-mid); }
 .mega-info-value { color: var(--yellow); margin-left: 6px; }
 .mega-info-none  { color: var(--gray-dark); margin-left: 6px; font-weight: 600; font-style: italic; }
@@ -195,15 +167,13 @@
 }
 
 /* ===== POKEMON SLOT =====
-   Altura FIXA. O slot jamais muda de tamanho — nem quando o badge
-   aparece, nem quando some. Todo o conteúdo fica dentro de .slot-inner
-   que usa position:absolute e preenche o slot inteiro.
-   Isso elimina completamente o reflow de layout.
+   Altura fixa. O slot nunca muda de tamanho — nem quando o badge
+   aparece, nem quando some.
 */
 .pokemon-slot {
   border-radius: var(--border-radius);
   position: relative;
-  height: 190px;      /* fixo — nunca muda */
+  height: 190px;
   overflow: hidden;
 }
 
@@ -226,18 +196,10 @@
 }
 .pokemon-slot.empty:hover .slot-plus { color: var(--yellow); }
 
-.slot-plus {
-  font-size: 2.2rem;
-  color: var(--gray-dark);
-  transition: color 0.15s;
-  line-height: 1;
-}
+.slot-plus { font-size: 2.2rem; color: var(--gray-dark); transition: color 0.15s; line-height: 1; }
 .slot-add-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--gray-dark);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: 0.72rem; font-weight: 700; color: var(--gray-dark);
+  text-transform: uppercase; letter-spacing: 0.05em;
 }
 
 /* ── Preenchido ── */
@@ -257,15 +219,13 @@
 }
 
 /* ── Badge de Mega ──
-   position:absolute, ocupa a faixa inteira do topo (left:0, right:0).
-   NUNCA usa transform ou left:50% — isso evitava o deslocamento horizontal.
+   Posição absoluta, faixa inteira do topo (left:0, right:0).
+   Sem transform, sem left:50% — zero risco de overflow horizontal.
    Altura fixa de 22px, sempre reservada pelo padding-top do .slot-inner.
 */
 .mega-badge {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  top: 0; left: 0; right: 0;
   height: 22px;
   z-index: 2;
   display: flex;
@@ -278,13 +238,12 @@
   letter-spacing: 0.06em;
   white-space: nowrap;
   border-radius: calc(var(--border-radius) - 2px) calc(var(--border-radius) - 2px) 0 0;
-  transition: opacity 0.15s;
 }
 
 /* ── Inner wrapper ──
    Ocupa o slot inteiro via position:absolute.
    padding-top SEMPRE = 22px (altura do badge), com ou sem badge visível.
-   Isso garante que o layout interno não se mova quando o badge aparece.
+   O layout interno NUNCA se move quando o badge aparece ou some.
 */
 .slot-inner {
   position: absolute;
@@ -306,9 +265,7 @@
   transition: transform 0.2s;
   flex-shrink: 0;
 }
-.pokemon-slot.filled:hover .slot-sprite {
-  transform: scale(1.08) translateY(-2px);
-}
+.pokemon-slot.filled:hover .slot-sprite { transform: scale(1.08) translateY(-2px); }
 
 .slot-name {
   font-weight: 800;
@@ -322,15 +279,10 @@
   white-space: nowrap;
 }
 
-.slot-types {
-  display: flex;
-  gap: 3px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
+.slot-types { display: flex; gap: 3px; flex-wrap: wrap; justify-content: center; }
 .slot-types .type-badge { font-size: 0.5rem; padding: 1px 5px; }
 
-/* ── Ações (aparecem no hover) ── */
+/* ── Ações ── */
 .slot-actions {
   display: flex;
   gap: 4px;
@@ -340,6 +292,7 @@
   margin-top: 2px;
   opacity: 0;
   transition: opacity 0.15s;
+  min-height: 22px; /* reserva espaço fixo — evita reflow ao aparecer */
 }
 .pokemon-slot.filled:hover .slot-actions { opacity: 1; }
 
@@ -353,39 +306,26 @@
   transition: background 0.12s;
   white-space: nowrap;
 }
-
 .mega-btn {
   background: rgba(255,203,5,0.2);
   color: var(--yellow);
   border: 1px solid rgba(255,203,5,0.4) !important;
 }
 .mega-btn:hover { background: rgba(255,203,5,0.35); }
-
 .unmega-btn {
   background: rgba(231,76,60,0.15);
   color: #e74c3c;
   border: 1px solid rgba(231,76,60,0.35) !important;
 }
 .unmega-btn:hover { background: rgba(231,76,60,0.3); }
+.mega-loading-label { font-size: 0.58rem; font-weight: 800; color: var(--yellow); white-space: nowrap; }
 
-/* Loading de mega */
-.mega-loading-label {
-  font-size: 0.58rem;
-  font-weight: 800;
-  color: var(--yellow);
-  white-space: nowrap;
-}
-
-/* ── Botão remover ──
-   Sempre no canto superior direito, abaixo do badge (top: 26px).
-*/
+/* ── Botão remover ── */
 .slot-remove {
   position: absolute;
-  top: 26px;
-  right: 5px;
+  top: 26px; right: 5px;
   z-index: 3;
-  width: 22px;
-  height: 22px;
+  width: 22px; height: 22px;
   border-radius: 50%;
   background: rgba(231,76,60,0.85);
   color: white;
@@ -416,8 +356,7 @@
 }
 .reset-confirm p { font-size: 0.88rem; color: #e74c3c; font-weight: 600; }
 
-@media (max-width: 600px) {
-  .player-team-info { width: 150px; }
+@media (max-width: 700px) {
   .team-mini-preview { display: none; }
   .team-slots-grid { grid-template-columns: repeat(3, 1fr); }
   .slot-sprite { width: 72px; height: 72px; }

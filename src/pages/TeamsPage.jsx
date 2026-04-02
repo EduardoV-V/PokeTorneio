@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useSyncExternalStore } from 'react'
 import { supabase } from '../utils/supabase.js'
 import {
   fetchPlayers,
@@ -18,13 +18,16 @@ export function formatName(name) {
   return name.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 }
 
-// Cache de verificação de mega: nome-base → pokemon-mega | null
+// ─── Cache de formas mega ──────────────────────────────────────────────────────
+// Chave: nome-base do pokémon
+// Valor: objeto {id,name,sprite,types} da forma mega, ou null se não existe
+// Nunca é limpo — dura a sessão toda, como um cache de API.
 const megaFormCache = {}
 
-/**
- * Busca e cacheia a forma mega de um pokémon.
- * Retorna o objeto formatado {id, name, sprite, types} ou null.
- */
+// Listeners para notificar componentes quando o cache muda
+const megaCacheListeners = new Set()
+function notifyMegaCache() { megaCacheListeners.forEach(fn => fn()) }
+
 async function fetchMegaForm(pokemonName) {
   const base = pokemonName.split('-')[0]
   if (base in megaFormCache) return megaFormCache[base]
@@ -44,34 +47,42 @@ async function fetchMegaForm(pokemonName) {
   }
 
   const result = (await tryFetch(`${base}-mega`)) ?? (await tryFetch(`${base}-mega-x`))
-  megaFormCache[base] = result   // null ou objeto — ambos são cacháveis
+  megaFormCache[base] = result
+  notifyMegaCache()   // avisa todos os componentes inscritos
   return result
 }
 
 /**
- * Verifica (sem bloquear) se um pokémon tem mega.
- * Retorna true | false | undefined (ainda verificando).
+ * Hook que lê o cache de mega de forma SÍNCRONA.
+ * Usa useSyncExternalStore para subscrever mudanças no cache sem useState/useEffect.
+ * Isso elimina o render intermediário com undefined que causava o "pisca".
+ *
+ * Retorna: true (tem mega) | false (não tem) | undefined (ainda buscando)
  */
 function useMegaAvailable(pokemonName) {
   const base = pokemonName?.split('-')[0]
-  const [state, setState] = useState(() => {
+
+  const getSnapshot = useCallback(() => {
     if (!base) return false
-    if (base in megaFormCache) return megaFormCache[base] !== null
-    return undefined // ainda não sabe
-  })
-
-  useEffect(() => {
-    if (!base) { setState(false); return }
-    if (base in megaFormCache) { setState(megaFormCache[base] !== null); return }
-
-    let cancelled = false
-    fetchMegaForm(base).then(result => {
-      if (!cancelled) setState(result !== null)
-    })
-    return () => { cancelled = true }
+    if (!(base in megaFormCache)) return undefined   // ainda não buscou
+    return megaFormCache[base] !== null
   }, [base])
 
-  return state // true | false | undefined
+  const subscribe = useCallback((callback) => {
+    megaCacheListeners.add(callback)
+    return () => megaCacheListeners.delete(callback)
+  }, [])
+
+  const available = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+
+  // Dispara a busca se ainda não está no cache
+  useEffect(() => {
+    if (base && !(base in megaFormCache)) {
+      fetchMegaForm(base)  // o resultado vai atualizar o cache e notificar via notifyMegaCache
+    }
+  }, [base])
+
+  return available
 }
 
 // ─── PokemonSlot ──────────────────────────────────────────────────────────────
@@ -91,13 +102,14 @@ function PokemonSlot({ pokemon, slotIdx, teamMegaIdx, onSelect, onRemove, onSetM
 
   return (
     <div className={`pokemon-slot filled ${isThisMega ? 'is-mega' : ''}`}>
-      {/* Badge absoluto no topo — não entra no fluxo do .slot-inner */}
+      {/* Badge no topo — position:absolute, fora do fluxo do .slot-inner */}
       {isThisMega && <div className="mega-badge">MEGA ⚡</div>}
 
-      {/* Botão remover — posição absoluta, fora do fluxo */}
+      {/* Botão remover — position:absolute, aparece no hover */}
       <button className="slot-remove" onClick={onRemove} title="Remover">🗑</button>
 
-      {/* Conteúdo principal: sempre ocupa a mesma área, padding-top fixo */}
+      {/* Conteúdo: position:absolute, padding-top fixo (= altura do badge).
+          O layout interno nunca se move, com ou sem badge. */}
       <div className="slot-inner">
         <img src={pokemon.sprite} alt={pokemon.name} className="slot-sprite" />
         <div className="slot-name">{formatName(pokemon.name)}</div>
@@ -119,8 +131,8 @@ function PokemonSlot({ pokemon, slotIdx, teamMegaIdx, onSelect, onRemove, onSetM
               ⚡ Mega
             </button>
           ) : null
-          /* megaAvailable === false → sem botão
-             megaAvailable === undefined → verificando, sem botão ainda */
+          /* false → sem mega disponível → sem botão
+             undefined → ainda verificando → sem botão por ora */
           }
         </div>
       </div>
@@ -134,14 +146,13 @@ export default function TeamsPage() {
   const [players, setPlayersState] = useState(null)
   const [teams, setTeamsState] = useState(null)
   const [megaSlots, setMegaSlotsState] = useState(null)
-  // Guarda o pokémon base antes de trocar pela forma mega
-  // { [playerId]: { [slotIdx]: pokemonOriginal } }
+  // Pokémon base antes de virar mega: { [playerId]: { [slotIdx]: pokemon } }
   const [originalPokemon, setOriginalPokemon] = useState({})
   const [loading, setLoading] = useState(true)
   const [picker, setPicker] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const [showReset, setShowReset] = useState(false)
-  // Qual slot está aguardando a API de mega: { playerId, slotIdx } | null
+  // Slot buscando a forma mega: { playerId, slotIdx } | null
   const [megaLoading, setMegaLoading] = useState(null)
 
   // ── initial load ─────────────────────────────────────────
@@ -236,7 +247,7 @@ export default function TeamsPage() {
     const currentMega = megaSlots?.[playerId]
     const isUnsetting = currentMega === slotIdx
 
-    // ── Reverter para forma normal ────────────────────────
+    // ── Reverter ─────────────────────────────────────────
     if (isUnsetting) {
       const orig = originalPokemon?.[playerId]?.[slotIdx]
       if (orig) {
@@ -262,22 +273,21 @@ export default function TeamsPage() {
     const basePokemon = team[slotIdx]
     if (!basePokemon) return
 
-    // A forma mega já deve estar no cache (useMegaAvailable buscou antes),
-    // mas chamamos fetchMegaForm de qualquer forma para garantir.
+    // Como o hook já pré-buscou, fetchMegaForm retorna do cache instantaneamente
+    // e o setMegaLoading quase nunca chega a causar um render intermediário.
     setMegaLoading({ playerId, slotIdx })
     const megaForm = await fetchMegaForm(basePokemon.name)
     setMegaLoading(null)
 
-    // Não deve chegar aqui sem mega (botão não é exibido), mas defesa extra:
-    if (!megaForm) return
+    if (!megaForm) return  // defesa extra — botão não deveria aparecer sem mega
 
-    // Guarda o original
+    // Guarda original
     setOriginalPokemon(prev => ({
       ...prev,
       [playerId]: { ...(prev[playerId] ?? {}), [slotIdx]: basePokemon },
     }))
 
-    // Se havia outro mega marcado, remove o original dele (não restaura)
+    // Remove original do mega antigo se havia outro
     if (currentMega !== null && currentMega !== slotIdx) {
       setOriginalPokemon(prev => {
         const next = { ...prev, [playerId]: { ...(prev[playerId] ?? {}) } }
@@ -286,7 +296,8 @@ export default function TeamsPage() {
       })
     }
 
-    // Atualiza estado local de uma vez — sem estados intermediários
+    // Aplica mega — dois setStates consecutivos no mesmo microtask
+    // são agrupados pelo React em um único render (React 18 automatic batching)
     setTeamsState(prev => {
       const team = [...(prev[playerId] ?? Array(TEAM_SIZE).fill(null))]
       team[slotIdx] = megaForm
@@ -440,10 +451,7 @@ export default function TeamsPage() {
       </div>
 
       {picker && (
-        <PokemonPicker
-          onSelect={handleSelect}
-          onClose={() => setPicker(null)}
-        />
+        <PokemonPicker onSelect={handleSelect} onClose={() => setPicker(null)} />
       )}
     </div>
   )

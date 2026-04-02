@@ -1,25 +1,37 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../utils/supabase.js'
-import { fetchPlayers, upsertPlayers, fetchBracket, upsertBracket } from '../utils/db.js'
-import { DEFAULT_PLAYERS } from '../utils/data.js'
+import {
+  fetchPlayers, upsertPlayers,
+  fetchBracket, upsertBracket,
+  fetchMatchups, upsertMatchups,
+} from '../utils/db.js'
 import Standings from '../components/Standings.jsx'
 import BracketVisual from '../components/BracketVisual.jsx'
+import Matchups from '../components/Matchups.jsx'
 import './TournamentPage.css'
+
+const TABS = [
+  { id: 'standings', label: '📊 Classificação' },
+  { id: 'matchups',  label: '⚔️ Confrontos' },
+]
 
 export default function TournamentPage() {
   const [players, setPlayersState] = useState(null)
-  const [bracket, setBracketState] = useState(undefined) // undefined = loading
+  const [bracket, setBracketState] = useState(undefined)
+  const [matchups, setMatchupsState] = useState(null)
+  const [activeTab, setActiveTab] = useState('standings')
   const [showReset, setShowReset] = useState(false)
   const [loading, setLoading] = useState(true)
 
   // ── initial load ────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
-    Promise.all([fetchPlayers(), fetchBracket()])
-      .then(([p, b]) => {
+    Promise.all([fetchPlayers(), fetchBracket(), fetchMatchups()])
+      .then(([p, b, m]) => {
         if (cancelled) return
         setPlayersState(p)
         setBracketState(b)
+        setMatchupsState(m)
         setLoading(false)
       })
       .catch(err => {
@@ -51,7 +63,18 @@ export default function TournamentPage() {
     return () => supabase.removeChannel(ch)
   }, [])
 
-  // ── setters (write to DB + update local state) ──────────
+  // ── realtime: matchups ──────────────────────────────────
+  useEffect(() => {
+    const ch = supabase
+      .channel('tournament-matchups')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matchups' }, () => {
+        fetchMatchups().then(setMatchupsState).catch(console.error)
+      })
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [])
+
+  // ── setters ─────────────────────────────────────────────
   const setPlayers = useCallback(async (updater) => {
     setPlayersState(prev => {
       const next = updater instanceof Function ? updater(prev) : updater
@@ -68,22 +91,32 @@ export default function TournamentPage() {
     })
   }, [])
 
+  const setMatchups = useCallback(async (updater) => {
+    setMatchupsState(prev => {
+      const next = updater instanceof Function ? updater(prev) : updater
+      upsertMatchups(next).catch(console.error)
+      return next
+    })
+  }, [])
+
   // ── reset ────────────────────────────────────────────────
   const handleReset = useCallback(async () => {
     const reset = (players ?? []).map(p => ({ ...p, wins: 0, losses: 0 }))
     setPlayersState(reset)
     setBracketState(null)
+    setMatchupsState({})
     setShowReset(false)
     try {
       await upsertPlayers(reset)
       await upsertBracket(null)
+      await upsertMatchups({})
     } catch (err) {
       console.error('Reset error:', err)
     }
   }, [players])
 
-  // ── loading / error states ───────────────────────────────
-  if (loading || players === null || bracket === undefined) {
+  // ── loading ──────────────────────────────────────────────
+  if (loading || players === null || bracket === undefined || matchups === null) {
     return (
       <div className="tournament-page">
         <div className="page-title"><span>🏆</span><span>TORNEIO</span></div>
@@ -99,32 +132,47 @@ export default function TournamentPage() {
 
   return (
     <div className="tournament-page">
-      <div className="page-title">
-        <span>🏆</span>
-        <span>TORNEIO</span>
-      </div>
+      <div className="page-title"><span>🏆</span><span>TORNEIO</span></div>
 
-      {!inBracket && (
+      {/* Fase eliminatória sobrepõe as abas */}
+      {inBracket ? (
         <>
-          <div className="phase-label standings-phase">
-            📊 Fase de Pontos Corridos
-          </div>
-          <div className="tab-content">
-            <Standings
-              players={players}
-              setPlayers={setPlayers}
-              onStartBracket={() => setBracket('init')}
-            />
-          </div>
-        </>
-      )}
-
-      {inBracket && (
-        <>
-          <div className="phase-label bracket-phase">
-            ⚡ Fase Eliminatória
-          </div>
+          <div className="phase-label bracket-phase">⚡ Fase Eliminatória</div>
           <BracketVisual players={players} bracket={bracket} setBracket={setBracket} />
+        </>
+      ) : (
+        <>
+          <div className="phase-label standings-phase">📊 Fase de Pontos Corridos</div>
+
+          {/* Abas */}
+          <div className="tabs-row">
+            {TABS.map(t => (
+              <button
+                key={t.id}
+                className={`tab-btn ${activeTab === t.id ? 'active' : ''}`}
+                onClick={() => setActiveTab(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="tab-content">
+            {activeTab === 'standings' && (
+              <Standings
+                players={players}
+                setPlayers={setPlayers}
+                onStartBracket={() => setBracket('init')}
+              />
+            )}
+            {activeTab === 'matchups' && (
+              <Matchups
+                players={players}
+                matchups={matchups}
+                setMatchups={setMatchups}
+              />
+            )}
+          </div>
         </>
       )}
 
@@ -134,7 +182,7 @@ export default function TournamentPage() {
               🗑️ Limpar progresso do torneio
             </button>
           : <div className="reset-confirm">
-              <p>⚠️ Isso vai zerar todos os pontos e a chave eliminatória. Os nomes dos jogadores serão mantidos. Continuar?</p>
+              <p>⚠️ Isso vai zerar todos os pontos, confrontos e a chave eliminatória. Os nomes dos jogadores serão mantidos. Continuar?</p>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 12 }}>
                 <button className="btn btn-danger btn-sm" onClick={handleReset}>Sim, limpar</button>
                 <button className="btn btn-ghost btn-sm" onClick={() => setShowReset(false)}>Cancelar</button>
