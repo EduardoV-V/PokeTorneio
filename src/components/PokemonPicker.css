@@ -56,13 +56,58 @@
   cursor: pointer;
   transition: all 0.15s ease;
   font-family: var(--font-body);
+  position: relative;
 }
 
-.poke-card:hover {
+.poke-card:hover:not(:disabled) {
   border-color: var(--yellow);
   background: rgba(255,203,5,0.1);
   transform: translateY(-3px);
   box-shadow: 0 6px 20px rgba(255,203,5,0.2);
+}
+
+/* Pokémon com mega disponível em megaMode */
+.poke-card.has-mega {
+  border-color: rgba(255,203,5,0.4);
+  background: rgba(255,203,5,0.06);
+}
+.poke-card.has-mega:hover:not(:disabled) {
+  border-color: var(--yellow);
+  box-shadow: 0 6px 20px rgba(255,203,5,0.35);
+}
+
+/* Badge "⚡ MEGA" no canto superior */
+.mega-available-badge {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--yellow);
+  color: var(--black);
+  font-size: 0.48rem;
+  font-weight: 900;
+  padding: 2px 7px;
+  border-radius: 20px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* Pokémon SEM mega em megaMode — desabilitado e esmaecido */
+.poke-card.no-mega {
+  opacity: 0.3;
+  cursor: not-allowed;
+  filter: grayscale(60%);
+}
+.poke-card.no-mega:hover {
+  transform: none;
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.05);
+  box-shadow: none;
+}
+
+/* Verificando mega (ainda carregando) */
+.poke-card.checking:not(.no-mega) {
+  opacity: 0.7;
 }
 
 .poke-card-img {
@@ -132,11 +177,6 @@
   font-weight: 700;
   color: var(--yellow);
   margin-bottom: 12px;
-}
-
-.poke-card.checking {
-  position: relative;
-  opacity: 0.6;
 }
 
 .checking-overlay {
