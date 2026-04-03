@@ -18,69 +18,69 @@ export function formatName(name) {
   return name.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 }
 
-// ─── Cache de formas mega ──────────────────────────────────────────────────────
-// Chave: nome-base do pokémon
-// Valor: objeto {id,name,sprite,types} da forma mega, ou null se não existe
-// Nunca é limpo — dura a sessão toda, como um cache de API.
-const megaFormCache = {}
-
-// Listeners para notificar componentes quando o cache muda
+// ─── Cache de formas mega ─────────────────────────────────────────────────────
+// base-name → { megaForm: obj|null, baseForm: obj|null }
+// baseForm é guardado junto para permitir reverter mesmo após reload
+const megaCache = {}
 const megaCacheListeners = new Set()
 function notifyMegaCache() { megaCacheListeners.forEach(fn => fn()) }
 
-async function fetchMegaForm(pokemonName) {
-  const base = pokemonName.split('-')[0]
-  if (base in megaFormCache) return megaFormCache[base]
+async function loadMegaData(baseName) {
+  if (baseName in megaCache) return megaCache[baseName]
 
   const tryFetch = async (slug) => {
     try {
       const res = await fetch(`${BASE_URL}/pokemon/${slug}`)
       if (!res.ok) return null
       const data = await res.json()
-      return {
-        id: data.id,
-        name: data.name,
-        sprite: data.sprites?.front_default || '',
-        types: data.types?.map(t => t.type.name) || [],
-      }
+      return { id: data.id, name: data.name, sprite: data.sprites?.front_default || '', types: data.types?.map(t => t.type.name) || [] }
     } catch { return null }
   }
 
-  const result = (await tryFetch(`${base}-mega`)) ?? (await tryFetch(`${base}-mega-x`))
-  megaFormCache[base] = result
-  notifyMegaCache()   // avisa todos os componentes inscritos
-  return result
+  const [baseForm, megaForm] = await Promise.all([
+    tryFetch(baseName),
+    tryFetch(`${baseName}-mega`).then(r => r ?? tryFetch(`${baseName}-mega-x`)),
+  ])
+
+  megaCache[baseName] = { baseForm, megaForm }
+  notifyMegaCache()
+  return megaCache[baseName]
 }
 
-/**
- * Hook que lê o cache de mega de forma SÍNCRONA.
- * Usa useSyncExternalStore para subscrever mudanças no cache sem useState/useEffect.
- * Isso elimina o render intermediário com undefined que causava o "pisca".
- *
- * Retorna: true (tem mega) | false (não tem) | undefined (ainda buscando)
- */
-function useMegaAvailable(pokemonName) {
-  const base = pokemonName?.split('-')[0]
+// Dado um nome de pokémon (pode ser mega ou base), retorna o nome-base
+function getBaseName(pokemonName) {
+  if (!pokemonName) return null
+  const n = pokemonName.toLowerCase()
+  // remove sufixos de mega
+  return n.replace(/-mega(-[xy])?$/, '')
+}
+
+// ─── Hook síncrono ────────────────────────────────────────────────────────────
+// Lê o cache de forma síncrona. Nunca retorna undefined quando já tem dados.
+// isCurrentlyMega: se true, o pokemon já é mega — sabemos que tem mega, retorna true direto.
+function useMegaAvailable(pokemonName, isCurrentlyMega) {
+  const base = getBaseName(pokemonName)
 
   const getSnapshot = useCallback(() => {
+    // Se o slot já é mega, obviamente tem mega disponível — sem necessidade de cache
+    if (isCurrentlyMega) return true
     if (!base) return false
-    if (!(base in megaFormCache)) return undefined   // ainda não buscou
-    return megaFormCache[base] !== null
-  }, [base])
+    if (!(base in megaCache)) return undefined
+    return megaCache[base].megaForm !== null
+  }, [base, isCurrentlyMega])
 
-  const subscribe = useCallback((callback) => {
-    megaCacheListeners.add(callback)
-    return () => megaCacheListeners.delete(callback)
+  const subscribe = useCallback((cb) => {
+    megaCacheListeners.add(cb)
+    return () => megaCacheListeners.delete(cb)
   }, [])
 
   const available = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
-  // Dispara a busca se ainda não está no cache
   useEffect(() => {
-    if (base && !(base in megaFormCache)) {
-      fetchMegaForm(base)  // o resultado vai atualizar o cache e notificar via notifyMegaCache
+    if (!isCurrentlyMega && base && !(base in megaCache)) {
+      loadMegaData(base)
     }
-  }, [base])
+  }, [base, isCurrentlyMega])
 
   return available
 }
@@ -89,7 +89,8 @@ function useMegaAvailable(pokemonName) {
 
 function PokemonSlot({ pokemon, slotIdx, teamMegaIdx, onSelect, onRemove, onSetMega, isLoadingMega }) {
   const isThisMega = teamMegaIdx === slotIdx
-  const megaAvailable = useMegaAvailable(pokemon?.name)
+  // Passa isThisMega para o hook — se já é mega, retorna true sem checar cache
+  const megaAvailable = useMegaAvailable(pokemon?.name, isThisMega)
 
   if (!pokemon) {
     return (
@@ -102,14 +103,8 @@ function PokemonSlot({ pokemon, slotIdx, teamMegaIdx, onSelect, onRemove, onSetM
 
   return (
     <div className={`pokemon-slot filled ${isThisMega ? 'is-mega' : ''}`}>
-      {/* Badge no topo — position:absolute, fora do fluxo do .slot-inner */}
       {isThisMega && <div className="mega-badge">MEGA ⚡</div>}
-
-      {/* Botão remover — position:absolute, aparece no hover */}
       <button className="slot-remove" onClick={onRemove} title="Remover">🗑</button>
-
-      {/* Conteúdo: position:absolute, padding-top fixo (= altura do badge).
-          O layout interno nunca se move, com ou sem badge. */}
       <div className="slot-inner">
         <img src={pokemon.sprite} alt={pokemon.name} className="slot-sprite" />
         <div className="slot-name">{formatName(pokemon.name)}</div>
@@ -118,22 +113,14 @@ function PokemonSlot({ pokemon, slotIdx, teamMegaIdx, onSelect, onRemove, onSetM
             <span key={t} className="type-badge" style={{ background: TYPE_COLORS[t] || '#888' }}>{t}</span>
           ))}
         </div>
-
         <div className="slot-actions">
           {isLoadingMega ? (
             <span className="mega-loading-label">⏳ buscando...</span>
           ) : isThisMega ? (
-            <button className="slot-action-btn unmega-btn" onClick={onSetMega}>
-              ✕ Reverter
-            </button>
+            <button className="slot-action-btn unmega-btn" onClick={onSetMega}>✕ Reverter</button>
           ) : megaAvailable === true ? (
-            <button className="slot-action-btn mega-btn" onClick={onSetMega}>
-              ⚡ Mega
-            </button>
-          ) : null
-          /* false → sem mega disponível → sem botão
-             undefined → ainda verificando → sem botão por ora */
-          }
+            <button className="slot-action-btn mega-btn" onClick={onSetMega}>⚡ Mega</button>
+          ) : null}
         </div>
       </div>
     </div>
@@ -146,16 +133,16 @@ export default function TeamsPage() {
   const [players, setPlayersState] = useState(null)
   const [teams, setTeamsState] = useState(null)
   const [megaSlots, setMegaSlotsState] = useState(null)
-  // Pokémon base antes de virar mega: { [playerId]: { [slotIdx]: pokemon } }
+  // originalPokemon: { [playerId]: { [slotIdx]: pokemon } }
+  // Persiste só na sessão — para reverter após reload buscamos da API
   const [originalPokemon, setOriginalPokemon] = useState({})
   const [loading, setLoading] = useState(true)
   const [picker, setPicker] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const [showReset, setShowReset] = useState(false)
-  // Slot buscando a forma mega: { playerId, slotIdx } | null
   const [megaLoading, setMegaLoading] = useState(null)
 
-  // ── initial load ─────────────────────────────────────────
+  // ── initial load ──────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
     fetchPlayers().then(async p => {
@@ -174,39 +161,34 @@ export default function TeamsPage() {
     return () => { cancelled = true }
   }, [])
 
-  // ── realtime: players ────────────────────────────────────
+  // ── realtime: players ─────────────────────────────────────
   useEffect(() => {
-    const ch = supabase
-      .channel('teams-players')
+    const ch = supabase.channel('teams-players')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, () => {
         fetchPlayers().then(setPlayersState).catch(console.error)
-      })
-      .subscribe()
+      }).subscribe()
     return () => supabase.removeChannel(ch)
   }, [])
 
-  // ── realtime: teams ──────────────────────────────────────
+  // ── realtime: teams ───────────────────────────────────────
   useEffect(() => {
-    const ch = supabase
-      .channel('teams-slots')
+    const ch = supabase.channel('teams-slots')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => {
         if (!players) return
         const ids = players.map(x => x.id)
         Promise.all([fetchTeams(ids), fetchMegaSlots(ids)])
           .then(([t, m]) => { setTeamsState(t); setMegaSlotsState(m) })
           .catch(console.error)
-      })
-      .subscribe()
+      }).subscribe()
     return () => supabase.removeChannel(ch)
   }, [players])
 
-  const getTeam = useCallback((playerId) => {
-    const t = teams?.[playerId]
-    if (!t || t.length !== TEAM_SIZE) return Array(TEAM_SIZE).fill(null)
-    return t
+  const getTeam = useCallback((pid) => {
+    const t = teams?.[pid]
+    return (!t || t.length !== TEAM_SIZE) ? Array(TEAM_SIZE).fill(null) : t
   }, [teams])
 
-  const getMegaSlot = useCallback((playerId) => megaSlots?.[playerId] ?? null, [megaSlots])
+  const getMegaSlot = useCallback((pid) => megaSlots?.[pid] ?? null, [megaSlots])
 
   // ── add pokemon ───────────────────────────────────────────
   const handleSelect = useCallback(async (pokemon) => {
@@ -247,14 +229,28 @@ export default function TeamsPage() {
     const currentMega = megaSlots?.[playerId]
     const isUnsetting = currentMega === slotIdx
 
-    // ── Reverter ─────────────────────────────────────────
+    // ── Reverter para forma base ──────────────────────────
     if (isUnsetting) {
-      const orig = originalPokemon?.[playerId]?.[slotIdx]
+      const team = getTeam(playerId)
+      const currentPokemon = team[slotIdx]
+
+      // Tenta pegar o original da sessão primeiro
+      let orig = originalPokemon?.[playerId]?.[slotIdx]
+
+      // Se não tem (após reload), busca da API usando o nome-base
+      if (!orig && currentPokemon) {
+        const base = getBaseName(currentPokemon.name)
+        setMegaLoading({ playerId, slotIdx })
+        const data = await loadMegaData(base)
+        setMegaLoading(null)
+        orig = data?.baseForm ?? null
+      }
+
       if (orig) {
         setTeamsState(prev => {
-          const team = [...(prev[playerId] ?? Array(TEAM_SIZE).fill(null))]
-          team[slotIdx] = orig
-          return { ...prev, [playerId]: team }
+          const t = [...(prev[playerId] ?? Array(TEAM_SIZE).fill(null))]
+          t[slotIdx] = orig
+          return { ...prev, [playerId]: t }
         })
         setOriginalPokemon(prev => {
           const next = { ...prev, [playerId]: { ...prev[playerId] } }
@@ -263,6 +259,7 @@ export default function TeamsPage() {
         })
         try { await upsertSlot(playerId, slotIdx, orig) } catch (err) { console.error(err) }
       }
+
       setMegaSlotsState(prev => ({ ...prev, [playerId]: null }))
       try { await dbSetMegaSlot(playerId, null) } catch (err) { console.error(err) }
       return
@@ -273,15 +270,17 @@ export default function TeamsPage() {
     const basePokemon = team[slotIdx]
     if (!basePokemon) return
 
-    // Como o hook já pré-buscou, fetchMegaForm retorna do cache instantaneamente
-    // e o setMegaLoading quase nunca chega a causar um render intermediário.
+    const base = getBaseName(basePokemon.name)
+
+    // Como useMegaAvailable já pré-carregou, loadMegaData retorna do cache
     setMegaLoading({ playerId, slotIdx })
-    const megaForm = await fetchMegaForm(basePokemon.name)
+    const data = await loadMegaData(base)
     setMegaLoading(null)
 
-    if (!megaForm) return  // defesa extra — botão não deveria aparecer sem mega
+    const megaForm = data?.megaForm
+    if (!megaForm) return
 
-    // Guarda original
+    // Guarda original da sessão
     setOriginalPokemon(prev => ({
       ...prev,
       [playerId]: { ...(prev[playerId] ?? {}), [slotIdx]: basePokemon },
@@ -296,12 +295,11 @@ export default function TeamsPage() {
       })
     }
 
-    // Aplica mega — dois setStates consecutivos no mesmo microtask
-    // são agrupados pelo React em um único render (React 18 automatic batching)
+    // React 18 automatic batching — estes dois setStates viram 1 render
     setTeamsState(prev => {
-      const team = [...(prev[playerId] ?? Array(TEAM_SIZE).fill(null))]
-      team[slotIdx] = megaForm
-      return { ...prev, [playerId]: team }
+      const t = [...(prev[playerId] ?? Array(TEAM_SIZE).fill(null))]
+      t[slotIdx] = megaForm
+      return { ...prev, [playerId]: t }
     })
     setMegaSlotsState(prev => ({ ...prev, [playerId]: slotIdx }))
 
@@ -327,10 +325,9 @@ export default function TeamsPage() {
     setMegaSlotsState(emptyMegas)
     setOriginalPokemon({})
     setShowReset(false)
-    try { await upsertAllTeams(emptyTeams, emptyMegas) } catch (err) { console.error('resetAllTeams error:', err) }
+    try { await upsertAllTeams(emptyTeams, emptyMegas) } catch (err) { console.error(err) }
   }, [players])
 
-  // ── loading ───────────────────────────────────────────────
   if (loading || !players || !teams || !megaSlots) {
     return (
       <div className="teams-page">
@@ -346,7 +343,6 @@ export default function TeamsPage() {
   return (
     <div className="teams-page">
       <div className="page-title"><span>👾</span><span>TIMES</span></div>
-
       <div className="teams-list">
         {players.map(player => {
           const team = getTeam(player.id)
@@ -357,10 +353,7 @@ export default function TeamsPage() {
 
           return (
             <div key={player.id} className={`player-team-card ${isOpen ? 'open' : ''}`}>
-              <button
-                className="player-team-header"
-                onClick={() => setExpanded(isOpen ? null : player.id)}
-              >
+              <button className="player-team-header" onClick={() => setExpanded(isOpen ? null : player.id)}>
                 <div className="player-team-info">
                   <div className="player-team-icon">
                     {player.icon
@@ -372,24 +365,17 @@ export default function TeamsPage() {
                     <div className="player-team-name">{player.name}</div>
                     <div className="player-team-sub">
                       {count}/{TEAM_SIZE} Pokémon
-                      {megaPokemon && (
-                        <span className="header-mega-badge"> · ⚡ {formatName(megaPokemon.name)}</span>
-                      )}
+                      {megaPokemon && <span className="header-mega-badge"> · ⚡ {formatName(megaPokemon.name)}</span>}
                     </div>
                   </div>
                 </div>
-
                 <div className="team-mini-preview">
                   {team.map((p, i) => (
                     <div key={i} className={`mini-slot ${megaSlot === i ? 'mini-mega' : ''}`}>
-                      {p
-                        ? <img src={p.sprite} alt={p.name} className="mini-sprite" />
-                        : <div className="mini-empty" />
-                      }
+                      {p ? <img src={p.sprite} alt={p.name} className="mini-sprite" /> : <div className="mini-empty" />}
                     </div>
                   ))}
                 </div>
-
                 <div className="expand-icon">{isOpen ? '▲' : '▼'}</div>
               </button>
 
@@ -399,12 +385,9 @@ export default function TeamsPage() {
                     <span className="mega-info-label">⚡ Mega Evolution: </span>
                     {megaPokemon
                       ? <span className="mega-info-value">{formatName(megaPokemon.name)}</span>
-                      : <span className="mega-info-none">
-                          Não definido — passe o mouse sobre um Pokémon com ⚡ Mega
-                        </span>
+                      : <span className="mega-info-none">Não definido — passe o mouse sobre um Pokémon com ⚡ Mega</span>
                     }
                   </div>
-
                   <div className="team-slots-grid">
                     {team.map((pokemon, slotIdx) => (
                       <PokemonSlot
@@ -415,14 +398,10 @@ export default function TeamsPage() {
                         onSelect={() => setPicker({ playerId: player.id, slotIdx })}
                         onRemove={() => handleRemove(player.id, slotIdx)}
                         onSetMega={() => handleSetMega(player.id, slotIdx)}
-                        isLoadingMega={
-                          megaLoading?.playerId === player.id &&
-                          megaLoading?.slotIdx === slotIdx
-                        }
+                        isLoadingMega={megaLoading?.playerId === player.id && megaLoading?.slotIdx === slotIdx}
                       />
                     ))}
                   </div>
-
                   <div className="team-actions">
                     <button className="btn btn-ghost btn-sm" onClick={() => handleClearTeam(player.id)}>
                       🗑️ Limpar time
@@ -437,9 +416,7 @@ export default function TeamsPage() {
 
       <div className="reset-section" style={{ marginTop: 32, textAlign: 'center' }}>
         {!showReset
-          ? <button className="btn btn-ghost btn-sm" onClick={() => setShowReset(true)}>
-              🗑️ Limpar todos os times
-            </button>
+          ? <button className="btn btn-ghost btn-sm" onClick={() => setShowReset(true)}>🗑️ Limpar todos os times</button>
           : <div className="reset-confirm">
               <p>⚠️ Isso vai remover todos os Pokémon de todos os times. Continuar?</p>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 12 }}>
@@ -450,9 +427,7 @@ export default function TeamsPage() {
         }
       </div>
 
-      {picker && (
-        <PokemonPicker onSelect={handleSelect} onClose={() => setPicker(null)} />
-      )}
+      {picker && <PokemonPicker onSelect={handleSelect} onClose={() => setPicker(null)} />}
     </div>
   )
 }

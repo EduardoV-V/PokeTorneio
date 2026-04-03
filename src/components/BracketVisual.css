@@ -4,38 +4,141 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 20px;
 }
 
-/* ===== STATUS (FIXADO CERTO) ===== */
+/* ===== CHAMPION SCREEN ===== */
+.bv-champion-screen {
+  position: relative;
+  width: 100%;
+  max-width: 700px;
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  background: linear-gradient(135deg, #1a0e00 0%, #2c1a00 40%, #1a0e00 100%);
+  border: 3px solid var(--yellow);
+  box-shadow:
+    0 0 60px rgba(255,203,5,0.35),
+    0 0 120px rgba(255,203,5,0.12),
+    var(--shadow-heavy);
+  padding: 40px 32px 36px;
+}
+
+/* Confetti animado */
+.bv-champion-confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -16px;
+  width: 8px;
+  height: 16px;
+  border-radius: 2px;
+  left: calc(var(--i) * 5.88%);
+  background: hsl(calc(var(--i) * 20), 80%, 60%);
+  animation: confetti-fall calc(2.5s + var(--i) * 0.15s) ease-in calc(var(--i) * 0.1s) infinite;
+  opacity: 0.85;
+}
+
+@keyframes confetti-fall {
+  0%   { transform: translateY(-20px) rotate(0deg);   opacity: 0.9; }
+  80%  { opacity: 0.8; }
+  100% { transform: translateY(340px) rotate(720deg); opacity: 0; }
+}
+
+/* Conteúdo centralizado */
+.bv-champion-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.bv-champion-trophy {
+  font-size: 4rem;
+  animation: bounce 1.8s ease infinite;
+  filter: drop-shadow(0 0 16px rgba(255,203,5,0.7));
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-10px); }
+}
+
+.bv-champion-label {
+  font-family: var(--font-pixel);
+  font-size: 0.65rem;
+  color: var(--yellow);
+  letter-spacing: 0.22em;
+  text-shadow: 0 0 20px rgba(255,203,5,0.8);
+}
+
+.bv-champion-avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 4px solid var(--yellow);
+  box-shadow:
+    0 0 0 4px rgba(255,203,5,0.2),
+    0 0 30px rgba(255,203,5,0.5);
+}
+.bv-champion-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.bv-champion-initials {
+  width: 100%; height: 100%;
+  background: linear-gradient(135deg, var(--red), var(--blue));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 2.5rem;
+  color: white;
+}
+
+.bv-champion-name {
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 2.2rem;
+  color: var(--yellow);
+  text-shadow: 0 0 24px rgba(255,203,5,0.6), 2px 2px 0 rgba(0,0,0,0.5);
+  letter-spacing: 0.03em;
+}
+
+.bv-champion-sub {
+  font-size: 0.85rem;
+  color: rgba(255,203,5,0.6);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+/* ===== STATUS ===== */
 .bv-status {
-  margin-top: 16px;
-  font-weight: bold;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--gray-mid);
   text-align: center;
 }
 
 /* ===== BOARD ===== */
 .bv-board {
   position: relative;
-
   width: 90vw;
   max-width: 700px;
   aspect-ratio: 3 / 2;
-
-  background-image: url('/bracket.jpg');
+  background-image: url('/PokeTorneio/bracket.jpg');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-
   border-radius: 20px;
   overflow: hidden;
-
-  box-shadow:
-    0 8px 40px rgba(0,0,0,0.4),
-    inset 0 0 60px rgba(255,255,255,0.15);
-
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4), inset 0 0 60px rgba(255,255,255,0.15);
   border: 4px solid #8a7000;
-
-  /* 🎯 CONTROLES GERAIS */
   --bv-size: 15%;
   --bv-semi-y: 82%;
   --bv-final-y: 56%;
@@ -47,12 +150,10 @@
   content: '';
   position: absolute;
   inset: 0;
-
   background:
     radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), transparent 60%),
     radial-gradient(circle at 70% 70%, rgba(255,255,255,0.1), transparent 50%),
     rgba(255,255,255,0.08);
-
   pointer-events: none;
   z-index: 1;
 }
@@ -64,35 +165,30 @@
   z-index: 2;
 }
 
-/* ===== SEMIS (CONTROLADAS) ===== */
-.bv-s1 { top: var(--bv-semi-y); left: calc(50% - var(--bv-gap) * 1.5); }
-.bv-s2 { top: var(--bv-semi-y); left: calc(50% - var(--bv-gap) * 0.5); }
-.bv-s3 { top: var(--bv-semi-y); left: calc(50% + var(--bv-gap) * 0.5); }
-.bv-s4 { top: var(--bv-semi-y); left: calc(50% + var(--bv-gap) * 1.5); }
+/* Semis */
+.bv-s1 { top: var(--bv-semi-y);  left: calc(50% - var(--bv-gap) * 1.5); }
+.bv-s2 { top: var(--bv-semi-y);  left: calc(50% - var(--bv-gap) * 0.5); }
+.bv-s3 { top: var(--bv-semi-y);  left: calc(50% + var(--bv-gap) * 0.5); }
+.bv-s4 { top: var(--bv-semi-y);  left: calc(50% + var(--bv-gap) * 1.5); }
 
-/* ===== FINAL ===== */
+/* Final */
 .bv-f1 { top: var(--bv-final-y); left: calc(50% - var(--bv-gap)); }
 .bv-f2 { top: var(--bv-final-y); left: calc(50% + var(--bv-gap)); }
 
-/* ===== CAMPEÃO ===== */
+/* Campeão */
 .bv-final { top: var(--bv-champ-y); left: 50%; }
 
-/* ===== PLAYER CARDS (ESCALA RESPONSIVA) ===== */
+/* ===== PLAYER CARDS ===== */
 .bv-card {
   width: 75px;
   aspect-ratio: 3 / 3.6;
-
-  transform: scale(var(--bv-scale));
-
-  transform-origin: center;
-
   border-radius: 8px;
   overflow: hidden;
   background: white;
   border: 3px solid #555;
+  transition: transform 0.15s, box-shadow 0.15s;
 }
 
-/* conteúdo */
 .bv-card-inner {
   width: 100%;
   height: 100%;
@@ -107,10 +203,20 @@
   object-fit: cover;
 }
 
-/* estados */
+.bv-card-initials {
+  width: 100%; height: 100%;
+  background: linear-gradient(135deg, var(--red), var(--blue));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 1.4rem;
+  color: white;
+}
+
 .bv-card--winner {
   border-color: gold;
-  box-shadow: 0 0 12px gold;
+  box-shadow: 0 0 14px gold;
 }
 
 .bv-card--loser {
@@ -123,5 +229,6 @@
 }
 
 .bv-card--clickable:hover {
-  transform: scale(1.08);
+  transform: scale(1.1);
+  box-shadow: 0 4px 16px rgba(255,203,5,0.5);
 }

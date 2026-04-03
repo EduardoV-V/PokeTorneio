@@ -23,7 +23,7 @@ export default function TournamentPage() {
   const [showReset, setShowReset] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  // ── initial load ────────────────────────────────────────
+  // ── initial load ─────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
     Promise.all([fetchPlayers(), fetchBracket(), fetchMatchups()])
@@ -41,41 +41,35 @@ export default function TournamentPage() {
     return () => { cancelled = true }
   }, [])
 
-  // ── realtime: players ───────────────────────────────────
+  // ── realtime: players ────────────────────────────────────
   useEffect(() => {
-    const ch = supabase
-      .channel('tournament-players')
+    const ch = supabase.channel('tournament-players')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, () => {
         fetchPlayers().then(setPlayersState).catch(console.error)
-      })
-      .subscribe()
+      }).subscribe()
     return () => supabase.removeChannel(ch)
   }, [])
 
-  // ── realtime: bracket ───────────────────────────────────
+  // ── realtime: bracket ────────────────────────────────────
   useEffect(() => {
-    const ch = supabase
-      .channel('tournament-bracket')
+    const ch = supabase.channel('tournament-bracket')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bracket' }, () => {
         fetchBracket().then(setBracketState).catch(console.error)
-      })
-      .subscribe()
+      }).subscribe()
     return () => supabase.removeChannel(ch)
   }, [])
 
-  // ── realtime: matchups ──────────────────────────────────
+  // ── realtime: matchups ───────────────────────────────────
   useEffect(() => {
-    const ch = supabase
-      .channel('tournament-matchups')
+    const ch = supabase.channel('tournament-matchups')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'matchups' }, () => {
         fetchMatchups().then(setMatchupsState).catch(console.error)
-      })
-      .subscribe()
+      }).subscribe()
     return () => supabase.removeChannel(ch)
   }, [])
 
-  // ── setters ─────────────────────────────────────────────
-  const setPlayers = useCallback(async (updater) => {
+  // ── setters ──────────────────────────────────────────────
+  const setPlayers = useCallback((updater) => {
     setPlayersState(prev => {
       const next = updater instanceof Function ? updater(prev) : updater
       upsertPlayers(next).catch(console.error)
@@ -83,7 +77,7 @@ export default function TournamentPage() {
     })
   }, [])
 
-  const setBracket = useCallback(async (updater) => {
+  const setBracket = useCallback((updater) => {
     setBracketState(prev => {
       const next = updater instanceof Function ? updater(prev) : updater
       upsertBracket(next).catch(console.error)
@@ -91,15 +85,14 @@ export default function TournamentPage() {
     })
   }, [])
 
-  const setMatchups = useCallback(async (updater) => {
-    setMatchupsState(prev => {
-      const next = updater instanceof Function ? updater(prev) : updater
-      upsertMatchups(next).catch(console.error)
-      return next
-    })
+  // setMatchups aceita tanto valor direto quanto função updater,
+  // e propaga para o DB automaticamente
+  const setMatchups = useCallback((newMatchups) => {
+    setMatchupsState(newMatchups)
+    upsertMatchups(newMatchups).catch(console.error)
   }, [])
 
-  // ── reset ────────────────────────────────────────────────
+  // ── reset ─────────────────────────────────────────────────
   const handleReset = useCallback(async () => {
     const reset = (players ?? []).map(p => ({ ...p, wins: 0, losses: 0 }))
     setPlayersState(reset)
@@ -110,12 +103,10 @@ export default function TournamentPage() {
       await upsertPlayers(reset)
       await upsertBracket(null)
       await upsertMatchups({})
-    } catch (err) {
-      console.error('Reset error:', err)
-    }
+    } catch (err) { console.error('Reset error:', err) }
   }, [players])
 
-  // ── loading ──────────────────────────────────────────────
+  // ── loading ───────────────────────────────────────────────
   if (loading || players === null || bracket === undefined || matchups === null) {
     return (
       <div className="tournament-page">
@@ -134,7 +125,6 @@ export default function TournamentPage() {
     <div className="tournament-page">
       <div className="page-title"><span>🏆</span><span>TORNEIO</span></div>
 
-      {/* Fase eliminatória sobrepõe as abas */}
       {inBracket ? (
         <>
           <div className="phase-label bracket-phase">⚡ Fase Eliminatória</div>
@@ -143,8 +133,6 @@ export default function TournamentPage() {
       ) : (
         <>
           <div className="phase-label standings-phase">📊 Fase de Pontos Corridos</div>
-
-          {/* Abas */}
           <div className="tabs-row">
             {TABS.map(t => (
               <button
@@ -156,7 +144,6 @@ export default function TournamentPage() {
               </button>
             ))}
           </div>
-
           <div className="tab-content">
             {activeTab === 'standings' && (
               <Standings
@@ -170,6 +157,7 @@ export default function TournamentPage() {
                 players={players}
                 matchups={matchups}
                 setMatchups={setMatchups}
+                setPlayers={setPlayers}
               />
             )}
           </div>
@@ -182,7 +170,7 @@ export default function TournamentPage() {
               🗑️ Limpar progresso do torneio
             </button>
           : <div className="reset-confirm">
-              <p>⚠️ Isso vai zerar todos os pontos, confrontos e a chave eliminatória. Os nomes dos jogadores serão mantidos. Continuar?</p>
+              <p>⚠️ Isso vai zerar todos os pontos, confrontos e a chave eliminatória. Os nomes serão mantidos. Continuar?</p>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 12 }}>
                 <button className="btn btn-danger btn-sm" onClick={handleReset}>Sim, limpar</button>
                 <button className="btn btn-ghost btn-sm" onClick={() => setShowReset(false)}>Cancelar</button>

@@ -2,34 +2,36 @@ import React, { useState } from 'react'
 import './Matchups.css'
 
 /**
- * Estrutura do estado `matchups`:
- * {
- *   "id_a-id_b": { played: true, winner: id_a | id_b | null }
- *   // a chave usa sempre min(id_a, id_b) + '-' + max(id_a, id_b)
- * }
+ * matchups: { "minId-maxId": { played: true, winner: id | null } }
+ *
+ * Ciclo de clique: vazio → jogaram (✓) → linha ganhou (W) → coluna ganhou (L) → vazio
+ *
+ * Ao mudar resultado com winner definido, recalcula wins/losses de todos os
+ * jogadores e chama setPlayers para atualizar o standings automaticamente.
  */
 
-function matchKey(idA, idB) {
-  return idA < idB ? `${idA}-${idB}` : `${idB}-${idA}`
+function matchKey(a, b) { return a < b ? `${a}-${b}` : `${b}-${a}` }
+function getMatch(matchups, a, b) { return matchups?.[matchKey(a, b)] ?? null }
+
+function computeStats(matchups) {
+  const stats = {}
+  Object.entries(matchups ?? {}).forEach(([key, m]) => {
+    if (!m?.played) return
+    const [a, b] = key.split('-').map(Number)
+    if (!stats[a]) stats[a] = { w: 0, l: 0, played: 0 }
+    if (!stats[b]) stats[b] = { w: 0, l: 0, played: 0 }
+    stats[a].played++
+    stats[b].played++
+    if (m.winner) {
+      stats[m.winner].w++
+      const loser = m.winner === a ? b : a
+      stats[loser].l++
+    }
+  })
+  return stats
 }
 
-function getMatch(matchups, idA, idB) {
-  return matchups?.[matchKey(idA, idB)] ?? null
-}
-
-// Ciclo de clique em uma célula:
-// null (não jogaram) → { played, winner: null } (jogaram, empate/indefinido)
-//   → { played, winner: rowPlayer } (linha ganhou)
-//   → { played, winner: colPlayer } (coluna ganhou)
-//   → null (resetar)
-function nextMatchState(current, rowId, colId) {
-  if (!current) return { played: true, winner: null }
-  if (!current.winner) return { played: true, winner: rowId }
-  if (current.winner === rowId) return { played: true, winner: colId }
-  return null  // resetar
-}
-
-export default function Matchups({ players, matchups, setMatchups }) {
+export default function Matchups({ players, matchups, setMatchups, setPlayers }) {
   const [hoverRow, setHoverRow] = useState(null)
   const [hoverCol, setHoverCol] = useState(null)
 
@@ -38,51 +40,41 @@ export default function Matchups({ players, matchups, setMatchups }) {
   const handleCell = (rowPlayer, colPlayer) => {
     const key = matchKey(rowPlayer.id, colPlayer.id)
     const current = matchups?.[key] ?? null
-    const next = nextMatchState(current, rowPlayer.id, colPlayer.id)
 
-    setMatchups(prev => {
-      const updated = { ...(prev ?? {}) }
-      if (next === null) {
-        delete updated[key]
-      } else {
-        updated[key] = next
-      }
-      return updated
-    })
+    // Determina próximo estado
+    let next
+    if (!current) {
+      next = { played: true, winner: null }
+    } else if (!current.winner) {
+      next = { played: true, winner: rowPlayer.id }
+    } else if (current.winner === rowPlayer.id) {
+      next = { played: true, winner: colPlayer.id }
+    } else {
+      next = null
+    }
+
+    // Atualiza matchups
+    const newMatchups = { ...(matchups ?? {}) }
+    if (next === null) {
+      delete newMatchups[key]
+    } else {
+      newMatchups[key] = next
+    }
+    setMatchups(newMatchups)
+
+    // Recalcula wins/losses de TODOS os jogadores a partir do estado completo
+    // e sincroniza com o standings
+    if (setPlayers) {
+      const stats = computeStats(newMatchups)
+      setPlayers(prev => prev.map(p => ({
+        ...p,
+        wins: stats[p.id]?.w ?? 0,
+        losses: stats[p.id]?.l ?? 0,
+      })))
+    }
   }
 
-  // Contagem de vitórias/derrotas na tabela de confrontos (separado do standings)
-  const matchupStats = players.reduce((acc, p) => {
-    acc[p.id] = { w: 0, l: 0, played: 0 }
-    return acc
-  }, {})
-
-  Object.values(matchups ?? {}).forEach(m => {
-    if (!m?.played) return
-    const [idA, idB] = Object.keys(matchups).find(k => matchups[k] === m)?.split('-').map(Number) ?? []
-    if (!idA || !idB) return
-    if (matchupStats[idA]) matchupStats[idA].played++
-    if (matchupStats[idB]) matchupStats[idB].played++
-    if (m.winner) {
-      if (matchupStats[m.winner]) matchupStats[m.winner].w++
-      const loserId = m.winner === idA ? idB : idA
-      if (matchupStats[loserId]) matchupStats[loserId].l++
-    }
-  })
-
-  // Recomputa corretamente iterando pelas chaves
-  const stats = players.reduce((acc, p) => { acc[p.id] = { w: 0, l: 0, played: 0 }; return acc }, {})
-  Object.entries(matchups ?? {}).forEach(([key, m]) => {
-    if (!m?.played) return
-    const [a, b] = key.split('-').map(Number)
-    if (stats[a]) stats[a].played++
-    if (stats[b]) stats[b].played++
-    if (m.winner) {
-      if (stats[m.winner]) stats[m.winner].w++
-      const loser = m.winner === a ? b : a
-      if (stats[loser]) stats[loser].l++
-    }
-  })
+  const stats = computeStats(matchups)
 
   return (
     <div className="matchups-wrap">
@@ -90,17 +82,16 @@ export default function Matchups({ players, matchups, setMatchups }) {
         <span className="legend-item"><span className="legend-dot played" />Jogaram</span>
         <span className="legend-item"><span className="legend-dot win" />Linha venceu</span>
         <span className="legend-item"><span className="legend-dot loss" />Linha perdeu</span>
-        <span className="legend-item legend-hint">Clique para ciclar: não jogou → jogou → linha ganhou → coluna ganhou → resetar</span>
+        <span className="legend-hint">Clique para ciclar: vazio → jogaram → linha ganhou → coluna ganhou → resetar</span>
       </div>
 
       <div className="matchups-scroll">
         <table className="matchups-table">
           <thead>
             <tr>
-              {/* Canto vazio */}
               <th className="corner-cell">
-                <span className="corner-atk">LINHA</span>
-                <span className="corner-def">COLUNA</span>
+                <span className="corner-label corner-row">LINHA</span>
+                <span className="corner-label corner-col">COLUNA</span>
               </th>
               {players.map(p => (
                 <th
@@ -127,13 +118,11 @@ export default function Matchups({ players, matchups, setMatchups }) {
             {players.map(rowP => (
               <tr
                 key={rowP.id}
-                className={hoverRow === rowP.id ? 'row-highlighted' : ''}
                 onMouseEnter={() => setHoverRow(rowP.id)}
                 onMouseLeave={() => setHoverRow(null)}
               >
-                {/* Row header */}
                 <td className={`row-header ${hoverRow === rowP.id ? 'highlighted' : ''}`}>
-                  <div className="header-player">
+                  <div className="header-player row-player">
                     {rowP.icon
                       ? <img src={rowP.icon} alt={rowP.name} className="header-icon" />
                       : <div className="header-icon-placeholder">{rowP.name[0]}</div>
@@ -142,13 +131,11 @@ export default function Matchups({ players, matchups, setMatchups }) {
                   </div>
                 </td>
 
-                {/* Cells */}
                 {players.map(colP => {
-                  // Diagonal principal — mesmo jogador
                   if (rowP.id === colP.id) {
                     return (
                       <td key={colP.id} className="cell cell-self">
-                        <div className="cell-self-mark">—</div>
+                        <span className="cell-self-mark">—</span>
                       </td>
                     )
                   }
@@ -157,7 +144,7 @@ export default function Matchups({ players, matchups, setMatchups }) {
                   const isHighlighted = hoverRow === rowP.id || hoverCol === colP.id
 
                   let cellClass = 'cell'
-                  let cellContent = null
+                  let cellContent
 
                   if (!match) {
                     cellClass += ' cell-empty'
@@ -180,17 +167,16 @@ export default function Matchups({ players, matchups, setMatchups }) {
                       key={colP.id}
                       className={cellClass}
                       onClick={() => handleCell(rowP, colP)}
-                      title={`${rowP.name} vs ${colP.name}`}
+                      title={`${rowP.name} vs ${colP.name} — clique para registrar`}
                     >
                       {cellContent}
                     </td>
                   )
                 })}
 
-                {/* Stats */}
                 <td className="stats-cell wins">{stats[rowP.id]?.w ?? 0}</td>
                 <td className="stats-cell losses">{stats[rowP.id]?.l ?? 0}</td>
-                <td className="stats-cell played">{stats[rowP.id]?.played ?? 0}</td>
+                <td className="stats-cell played-count">{stats[rowP.id]?.played ?? 0}</td>
               </tr>
             ))}
           </tbody>
@@ -200,6 +186,7 @@ export default function Matchups({ players, matchups, setMatchups }) {
       <div className="matchups-summary">
         {players.map(p => {
           const s = stats[p.id] ?? { w: 0, l: 0, played: 0 }
+          const draws = s.played - s.w - s.l
           const remaining = players.length - 1 - s.played
           return (
             <div key={p.id} className="summary-card">
@@ -212,7 +199,7 @@ export default function Matchups({ players, matchups, setMatchups }) {
               <div className="summary-name">{p.name}</div>
               <div className="summary-stats">
                 <span className="summary-w">{s.w}V</span>
-                <span className="summary-d">{s.played - s.w - s.l}E</span>
+                {draws > 0 && <span className="summary-d">{draws}E</span>}
                 <span className="summary-l">{s.l}D</span>
               </div>
               <div className="summary-remaining">{remaining} restantes</div>
